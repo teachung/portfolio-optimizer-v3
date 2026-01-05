@@ -57,29 +57,28 @@ const App: React.FC = () => {
       addToast('請先載入股票數據', 'error');
       return;
     }
-
-    // --- STEP 6: 安全係數獲取邏輯 ---
+    
+    // --- Step 6: 安全係數邏輯整合 (Security Factor Integration) ---
     let securityFactor = 1.0;
     try {
-        // 嘗試從 Netlify Function 獲取係數
-        // 開發環境下，vite.config.ts 的 proxy 會將此請求導向正確位置
-        const response = await fetch('/.netlify/functions/get_security_factor');
-        if (response.ok) {
-            const data = await response.json();
-            if (data.factor) {
+        // 呼叫我們在 netlify/functions/get_security_factor.mts 建立的函數
+        const res = await fetch('/.netlify/functions/get_security_factor');
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.factor) {
                 securityFactor = data.factor;
-                console.log("Security Factor Loaded:", securityFactor);
+                console.log("Security Factor Validated:", securityFactor);
             }
         } else {
-            console.warn("Security Factor fetch failed, using default.");
+            console.warn("Security endpoint unreachable, utilizing default parameters.");
+            // 在開發環境或連線失敗時，不阻擋用戶，但給予提示
+            // addToast('安全驗證連線異常，使用預設係數運行', 'warning');
         }
     } catch (e) {
-        console.warn("Security check bypassed (offline/dev mode)", e);
-        // 在本地開發如果沒有啟動 Netlify Dev，這裡會失敗，我們預設使用 1.0 讓程式繼續運行
-        securityFactor = 1.0; 
+        console.warn("Security check bypassed (Offline/Dev mode):", e);
     }
-    // ---------------------------------
-    
+    // -------------------------------------------------------------
+
     setIsRunning(true);
     shouldStopRef.current = false;
     setResults(null);
@@ -108,8 +107,8 @@ const App: React.FC = () => {
     workersRef.current.forEach((worker, index) => {
         worker.postMessage({
             stockData,
-            // 將獲取到的 securityFactor 注入到 settings 中傳給 Worker
-            settings: { ...settings, securityFactor },
+            settings,
+            securityFactor, // 將獲取到的安全係數傳遞給 Worker
             simulations: simsPerWorker,
             workerId: index
         });

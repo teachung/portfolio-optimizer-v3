@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Chart, registerables, Plugin, InteractionItem, ActiveElement } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
@@ -354,7 +355,8 @@ const MarketCycleClock: React.FC<{ weights: Record<string, number>, stockData: S
     const canvasRef = useRef<HTMLCanvasElement>(null);
     
     // Limit to top 20 for rotation analysis to improve performance
-    const cycleData = useMemo(() => {
+    // Fix: Explicitly type the result of useMemo to avoid "unknown" index errors downstream
+    const cycleData = useMemo<{ticker: string, angle: number, radius: number, x: number, y: number}[]>(() => {
         if (!stockData || !portfolioValues) return [];
         // Only consider top 20 weighted assets for cycle calculation
         const topTickers = Object.keys(weights)
@@ -695,7 +697,8 @@ const AssetRotationChart: React.FC<{ weights: Record<string, number>, stockData:
         const filteredWeights: Record<string, number> = {};
         topTickers.forEach(t => filteredWeights[t] = weights[t]);
 
-        const rotationData = calculateAssetRotation(filteredWeights, stockData, portfolioValues, 20, downsampleStep);
+        // Fix: Explicitly cast the result to expected structure to avoid 'unknown' type errors on data.x/data.y
+        const rotationData = calculateAssetRotation(filteredWeights, stockData, portfolioValues, 20, downsampleStep) as Record<string, {x: number[], y: number[], dates: string[]}>;
         const rotationDatasets: any[] = [];
         
         Object.entries(rotationData).forEach(([ticker, data]) => {

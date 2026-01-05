@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // 這段設定是為了讓前端能順利呼叫後端的 Netlify Function
+      // 這段設定是為了讓前端能順利呼叫後端的 Netlify Function (如果有的話)
       '/.netlify/functions': {
         target: 'http://localhost:8888',
         changeOrigin: true,
