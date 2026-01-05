@@ -13,6 +13,7 @@ export interface PortfolioParams {
   cagrThreshold: number;
   sharpeThreshold: number;
   maxDDThreshold: number;
+  priorityTicker?: string; // Added optional priority ticker
 }
 
 export interface PriorityStockConfig {
@@ -46,7 +47,6 @@ export interface OptimizationSettings {
   hedgeConfig: HedgeConfig;
   dynamicRebalanceThreshold: number;
   userPortfolio?: Record<string, number>;
-  securityFactor?: number; // 新增：安全係數欄位
 }
 
 export interface Metrics {

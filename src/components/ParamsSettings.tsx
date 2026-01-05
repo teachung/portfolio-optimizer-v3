@@ -25,13 +25,13 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = ({ initialParams, stockTic
   // Updated defaults
   const [settings, setSettings] = useState<Omit<OptimizationSettings, 'priorityStockConfig' | 'hedgeConfig' | 'userPortfolio'>>({
     simulations: 50000,
-    maxStocks: 10, 
-    maxWeight: 40,
-    minWeight: 5,
-    strictMode: false,
-    cagrThreshold: 0,
-    sharpeThreshold: 0.0,
-    maxDDThreshold: 60,
+    maxStocks: initialParams.maxStockCount || 10, // Use initial params if valid
+    maxWeight: (initialParams.maxSingleWeight || 0.4) * 100, // Convert back to percent
+    minWeight: (initialParams.minSingleWeight || 0.05) * 100,
+    strictMode: initialParams.strictMode,
+    cagrThreshold: (initialParams.cagrThreshold || 0) * 100,
+    sharpeThreshold: initialParams.sharpeThreshold || 0.0,
+    maxDDThreshold: (initialParams.maxDDThreshold || 0.6) * 100,
     targetCAGR: 25,
     rebalanceMode: 'quarterly',
     optimizeTarget: 'super_ai',
@@ -39,13 +39,23 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = ({ initialParams, stockTic
     dynamicRebalanceThreshold: 20,
   });
 
+  // Determine initial priority ticker from passed params (DataInput)
+  const initialPriorityTicker = useMemo(() => {
+      if (initialParams.priorityTicker) {
+          // Find case-insensitive match
+          const match = stockTickers.find(t => t.toLowerCase() === initialParams.priorityTicker?.toLowerCase());
+          return match || null;
+      }
+      return null;
+  }, [initialParams.priorityTicker, stockTickers]);
+
   const [priorityStock, setPriorityStock] = useState<PriorityStockConfig>({
-      ticker: null,
+      ticker: initialPriorityTicker,
       minWeight: 5,
       maxWeight: 20
   });
 
-  // NEW: State for filtering tickers (這就是新的搜尋狀態)
+  // NEW: State for filtering tickers
   const [tickerSearch, setTickerSearch] = useState('');
 
   const [hedgeConfig, setHedgeConfig] = useState<HedgeConfig>({
@@ -59,7 +69,7 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = ({ initialParams, stockTic
   const [userHoldings, setUserHoldings] = useState<UserHolding[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // NEW: Filter logic (這就是搜尋過濾邏輯)
+  // NEW: Filter logic
   const filteredTickers = useMemo(() => {
       if (!tickerSearch) return stockTickers;
       return stockTickers.filter(t => t.toLowerCase().includes(tickerSearch.toLowerCase()));
@@ -411,7 +421,7 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = ({ initialParams, stockTic
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <ParamCard title="指定優先股" description="從您的數據中選擇一隻股票">
                 <div className="space-y-2">
-                    {/* 新增的搜尋框 (這裡就是您要的功能位置) */}
+                    {/* 新增的搜尋框 */}
                     <div className="relative">
                         <span className="absolute left-2 top-2 text-gray-500 text-xs"><i className="fas fa-search"></i></span>
                         <input 
