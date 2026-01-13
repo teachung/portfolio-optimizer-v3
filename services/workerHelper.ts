@@ -4,29 +4,29 @@ import { calculateMetrics, calculatePortfolioMetrics, generateRandomWeights, gen
 export const createWorkerCode = () => {
     return `
     // --- Injected Functions ---
-    ${calculateMA.toString()}
-    ${calculateMetrics.toString()}
-    ${calculatePortfolioMetrics.toString()}
-    ${repairWeights.toString()}
-    ${generateRandomWeights.toString()}
-    ${generateDiscreteWeights.toString()}
-    ${calculatePortfolioPerformance.toString()}
-    ${mutateWeights.toString()}
-    ${crossoverWeights.toString()}
-    ${calculateCorrelationMatrix.toString()}
-    ${calculateMonthlyReturns.toString()}
-    ${calculateStabilityScore.toString()}
-    ${linearRegression.toString()}
-    ${calculateStandardDeviation.toString()}
-    ${calculateAverage.toString()}
+    const calculateMA = ${calculateMA.toString()};
+    const calculateMetrics = ${calculateMetrics.toString()};
+    const calculatePortfolioMetrics = ${calculatePortfolioMetrics.toString()};
+    const repairWeights = ${repairWeights.toString()};
+    const generateRandomWeights = ${generateRandomWeights.toString()};
+    const generateDiscreteWeights = ${generateDiscreteWeights.toString()};
+    const calculatePortfolioPerformance = ${calculatePortfolioPerformance.toString()};
+    const mutateWeights = ${mutateWeights.toString()};
+    const crossoverWeights = ${crossoverWeights.toString()};
+    const calculateCorrelationMatrix = ${calculateCorrelationMatrix.toString()};
+    const calculateMonthlyReturns = ${calculateMonthlyReturns.toString()};
+    const calculateStabilityScore = ${calculateStabilityScore.toString()};
+    const linearRegression = ${linearRegression.toString()};
+    const calculateStandardDeviation = ${calculateStandardDeviation.toString()};
+    const calculateAverage = ${calculateAverage.toString()};
     
     // Super AI V2.0 Injections
-    ${calculateSuperAI_v2_adaptive.toString()}
-    ${detectFrequency.toString()}
-    ${calculateRSquared.toString()}
-    ${calculateCVaRPenalty.toString()}
-    ${calculateChannelScore.toString()}
-    ${saturate.toString()}
+    const calculateSuperAI_v2_adaptive = ${calculateSuperAI_v2_adaptive.toString()};
+    const detectFrequency = ${detectFrequency.toString()};
+    const calculateRSquared = ${calculateRSquared.toString()};
+    const calculateCVaRPenalty = ${calculateCVaRPenalty.toString()};
+    const calculateChannelScore = ${calculateChannelScore.toString()};
+    const saturate = ${saturate.toString()};
 
     // --- Helpers for Worker ---
     const tournamentSelection = (pop, k) => {
