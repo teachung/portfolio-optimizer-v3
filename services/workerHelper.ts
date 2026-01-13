@@ -40,11 +40,34 @@ export const createWorkerCode = () => {
         return best;
     };
 
+    // --- WASM Integration ---
+    let wasmModule = null;
+    let isAuthorized = 0;
+
+    const initWasm = async (wasmBinary) => {
+        if (wasmModule) return;
+        const imports = {
+            env: {
+                abort: () => console.error("WASM Aborted")
+            }
+        };
+        const { instance } = await WebAssembly.instantiate(wasmBinary, imports);
+        wasmModule = instance.exports;
+        
+        // Domain Locking Check
+        const domain = self.location.hostname;
+        isAuthorized = wasmModule.checkDomain(domain);
+    };
+
     // --- Worker Logic ---
-    self.onmessage = (e) => {
-        const { stockData, settings, simulations, workerId } = e.data;
+    self.onmessage = async (e) => {
+        const { stockData, settings, simulations, workerId, wasmBinary } = e.data;
         
         try {
+            if (wasmBinary) {
+                await initWasm(wasmBinary);
+            }
+
             // PERFORMANCE FIX: Removed O(N^2) full correlation matrix calculation.
             // Calculating 1000x1000 matrix kills the worker. We only need it for the final portfolio if at all.
             let correlationMatrix = null;
@@ -153,23 +176,38 @@ export const createWorkerCode = () => {
                     case 'smoothness': score = metrics.smoothness || 0; break;
                     case 'winrate': score = -(metrics.winRate || 0); break;
                     case 'ultra_smooth_v1':
-                        // v1: (Smoothness^2) * ((1 - MaxDD)^2) * WinRate
-                        score = Math.pow(metrics.smoothness || 0, 2) * 
-                                Math.pow(1 - (metrics.maxDD || 0), 2) * 
-                                (metrics.winRate || 0);
+                        if (wasmModule) {
+                            score = wasmModule.calculateUltraSmoothV1Score(
+                                metrics.smoothness || 0,
+                                metrics.maxDD || 0,
+                                metrics.winRate || 0,
+                                isAuthorized
+                            );
+                        } else {
+                            score = Math.pow(metrics.smoothness || 0, 2) * 
+                                    Math.pow(1 - (metrics.maxDD || 0), 2) * 
+                                    (metrics.winRate || 0);
+                        }
                         break;
                     case 'ultra_smooth':
-                        // --- STABILITY ALGORITHM (V2) ---
                         const stability = calculateStabilityScore(pValues);
                         if (stability.disqualified) {
                             score = -9999;
                         } else {
-                            score = stability.score;
+                            if (wasmModule) {
+                                score = wasmModule.calculateStabilityV2Score(
+                                    stability.metrics.channelConsistency || 0,
+                                    metrics.maxDD || 0,
+                                    metrics.volatility || 0,
+                                    isAuthorized
+                                );
+                            } else {
+                                score = stability.score;
+                            }
                             metrics.smoothness = stability.metrics.channelConsistency; 
                         }
                         break;
                     case 'super_ai_v2':
-                        // --- SUPER AI V2.0 (Adaptive Geometric Product) ---
                         const totalDaysHint = years * 365;
                         const v2Result = calculateSuperAI_v2_adaptive({
                             portfolioValues: pValues,
@@ -182,10 +220,19 @@ export const createWorkerCode = () => {
                         });
                         
                         if (v2Result.disqualified) {
-                            score = v2Result.score; // Usually negative large number
-                        } else {
                             score = v2Result.score;
-                            // Update metrics with v2 specific calculations if needed
+                        } else {
+                            if (wasmModule) {
+                                score = wasmModule.calculateSuperAIScore(
+                                    v2Result.metrics.sortino,
+                                    v2Result.metrics.calmar,
+                                    v2Result.metrics.smoothness,
+                                    v2Result.metrics.channelComponent || 0.9,
+                                    isAuthorized
+                                );
+                            } else {
+                                score = v2Result.score;
+                            }
                             metrics.smoothness = v2Result.metrics.smoothness;
                             metrics.sortino = v2Result.metrics.sortino;
                         }
@@ -200,8 +247,16 @@ export const createWorkerCode = () => {
                         score = (metrics.cagr >= settings.targetCAGR) ? -(metrics.winRate || 0) : 1 + (settings.targetCAGR - metrics.cagr);
                         break;
                     default: 
-                        // Original Super AI (Linear Weighted)
-                        score = (metrics.sharpe * 0.6) + (metrics.calmar * 0.2) + (metrics.smoothness * 0.2);
+                        if (wasmModule) {
+                            score = wasmModule.calculateDefaultSuperAIScore(
+                                metrics.sharpe || 0,
+                                metrics.calmar || 0,
+                                metrics.smoothness || 0,
+                                isAuthorized
+                            );
+                        } else {
+                            score = (metrics.sharpe * 0.6) + (metrics.calmar * 0.2) + (metrics.smoothness * 0.2);
+                        }
                         break;
                 }
 

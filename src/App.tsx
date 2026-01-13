@@ -3,10 +3,10 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Tab, StockData, PortfolioParams, OptimizationSettings, OptimizationResult, ProgressUpdate, PriorityStockConfig, ScatterPoint } from './types';
 import DataInput from './components/DataInput';
 import ParamsSettings from './components/ParamsSettings';
-import RunOptimization from './components/RunOptimization';
+import RunOptimization from '../components/RunOptimization';
 import ResultsDisplay from './components/ResultsDisplay';
-import Toast from './components/Toast';
-import { createWorkerCode } from './services/workerHelper';
+import Toast from '../components/Toast';
+import { createWorkerCode } from '../services/workerHelper';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.Data);
@@ -102,6 +102,17 @@ const App: React.FC = () => {
     
     addToast(`開始優化... 使用 ${workerCount} 線程 (${settings.optimizationAlgorithm === 'genetic' ? '🧬 遺傳算法' : '🎲 蒙地卡羅'})`, 'info');
 
+    // Load WASM binary
+    let wasmBinary: ArrayBuffer | null = null;
+    try {
+        const response = await fetch('/build/release.wasm');
+        if (response.ok) {
+            wasmBinary = await response.arrayBuffer();
+        }
+    } catch (e) {
+        console.error("Failed to load WASM binary:", e);
+    }
+
     const simsPerWorker = Math.ceil(settings.simulations / workerCount);
 
     workersRef.current.forEach((worker, index) => {
@@ -110,7 +121,8 @@ const App: React.FC = () => {
             settings,
             securityFactor, // 將獲取到的安全係數傳遞給 Worker
             simulations: simsPerWorker,
-            workerId: index
+            workerId: index,
+            wasmBinary // Pass WASM binary to worker
         });
         
         worker.onmessage = (e: MessageEvent<ProgressUpdate>) => {
