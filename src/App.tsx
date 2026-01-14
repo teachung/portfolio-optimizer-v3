@@ -349,7 +349,7 @@ const App: React.FC = () => {
                 </g>
               </g>
             </svg>
-            <span>AI 智慧投資組合優化器 v3.4</span>
+            <span>AI 智慧投資組合優化器 v3.4.1 (Netlify Sync)</span>
           </h1>
           <p className="mt-2 text-gray-400">Web Worker 遺傳算法 | 風險平價模擬 | 效率前緣互動分析</p>
         </header>
