@@ -13,7 +13,7 @@ export interface PortfolioParams {
   cagrThreshold: number;
   sharpeThreshold: number;
   maxDDThreshold: number;
-  priorityTicker?: string; // Added optional priority ticker
+  priorityTicker?: string;
 }
 
 export interface PriorityStockConfig {

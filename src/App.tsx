@@ -3,13 +3,94 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Tab, StockData, PortfolioParams, OptimizationSettings, OptimizationResult, ProgressUpdate, PriorityStockConfig, ScatterPoint } from './types';
 import DataInput from './components/DataInput';
 import ParamsSettings from './components/ParamsSettings';
-import RunOptimization from '../components/RunOptimization';
+import RunOptimization from './components/RunOptimization';
 import ResultsDisplay from './components/ResultsDisplay';
-import Toast from '../components/Toast';
+import Toast from './components/Toast';
 import { createWorkerCode } from '../services/workerHelper';
+import Login from './components/Login';
+import Pending from './components/Pending';
+import { auth } from './firebase';
+import { onAuthStateChanged, User, getRedirectResult } from 'firebase/auth';
 
 const App: React.FC = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isApproved, setIsApproved] = useState<boolean>(false);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<Tab>(Tab.Data);
+
+  // 處理重定向結果與監聽 Firebase 登入狀態
+  useEffect(() => {
+    let isMounted = true;
+
+    const initAuth = async () => {
+      try {
+        // 1. 檢查是否有重定向回來的登入結果
+        const result = await getRedirectResult(auth);
+        if (result?.user && isMounted) {
+          console.log("Redirect login success:", result.user.email);
+        }
+      } catch (error: any) {
+        console.error("Redirect error:", error);
+        // 忽略某些良性錯誤，或只在必要時提示
+        if (error.code !== 'auth/cancelled-popup-request' && isMounted) {
+          alert("登入過程發生錯誤: " + error.message);
+        }
+      }
+
+      // 2. 監聽登入狀態變化
+      const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        if (!isMounted) return;
+        
+        setUser(currentUser);
+        if (currentUser) {
+          await checkUserStatus(currentUser.email || '');
+        } else {
+          setIsApproved(false);
+        }
+        setAuthLoading(false);
+      });
+
+      return unsubscribe;
+    };
+
+    const authPromise = initAuth();
+
+    return () => {
+      isMounted = false;
+      authPromise.then(unsubscribe => unsubscribe && unsubscribe());
+    };
+  }, []);
+
+  const checkUserStatus = async (email: string) => {
+    console.log("🔍 開始檢查用戶狀態:", email);
+    try {
+      // 使用相對路徑，但在開發環境下增加日誌
+      const apiUrl = `/.netlify/functions/check-user-status?email=${encodeURIComponent(email)}`;
+      console.log("📡 呼叫 API:", apiUrl);
+      
+      const res = await fetch(apiUrl);
+      console.log("📥 API 回應狀態碼:", res.status);
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("✅ 成功獲取狀態:", data);
+        setIsApproved(data.approved);
+        
+        if (!data.approved) {
+          console.log("⏳ 用戶已登入但尚未獲得後台批准");
+        }
+      } else {
+        const errorText = await res.text();
+        console.error("❌ API 報錯:", errorText);
+        // 如果 API 報錯（例如 404），我們暫時不讓用戶進去，但要報警
+        alert(`後端連線失敗 (${res.status})，請確保您是使用 8888 端口訪問`);
+        setIsApproved(false);
+      }
+    } catch (e) {
+      console.error("🚨 Fetch 發生嚴重錯誤:", e);
+      setIsApproved(false);
+    }
+  };
   const [stockData, setStockData] = useState<StockData | null>(null);
   const [params, setParams] = useState<PortfolioParams | null>(null);
   const [optimizationSettings, setOptimizationSettings] = useState<OptimizationSettings | null>(null);
@@ -218,8 +299,23 @@ const App: React.FC = () => {
       </button>
   );
 
+  if (authLoading) {
+    return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">載入中...</div>;
+  }
+
+  if (!user) {
+    return <Login onLoginSuccess={(email) => checkUserStatus(email)} />;
+  }
+
+  if (!isApproved) {
+    return <Pending />;
+  }
+
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8 bg-gray-900 text-gray-200 font-sans">
+      <div className="absolute top-4 right-4">
+        <button onClick={() => auth.signOut()} className="bg-gray-800 hover:bg-gray-700 text-xs py-1 px-3 rounded border border-gray-600">登出 ({user.email})</button>
+      </div>
       <div className="max-w-7xl mx-auto bg-gray-800/50 rounded-2xl shadow-2xl shadow-black/30 overflow-hidden border border-gray-700">
         <header className="p-6 text-center bg-gray-900/70 border-b-2 border-teal-500/50">
           <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center justify-center gap-3">

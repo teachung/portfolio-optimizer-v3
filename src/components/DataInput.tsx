@@ -8,51 +8,6 @@ interface DataInputProps {
 
 const DataInput: React.FC<DataInputProps> = ({ onDataParsed }) => {
   const [pasteData, setPasteData] = useState('');
-  const [priorityTickerInput, setPriorityTickerInput] = useState(''); // New state for priority ticker
-
-  // --- 部署檔案內容定義 ---
-  const netlifyTomlContent = `[build]
-  command = "npm run build"
-  publish = "dist"
-
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
-
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200`;
-
-  const securityFunctionContent = `import { Context, Config } from "@netlify/functions";
-
-export default async (req: Request, context: Context) => {
-    // 模擬返回安全係數 1.0
-    return new Response(JSON.stringify({ factor: 1.0 }), {
-        headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-        },
-        status: 200
-    });
-};
-
-export const config: Config = {
-    path: "/.netlify/functions/get_security_factor"
-};`;
-
-  // --- 下載輔助函數 ---
-  const downloadFile = (filename: string, content: string) => {
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-  };
 
   const parsePastedData = () => {
     if (!pasteData.trim()) {
@@ -87,7 +42,7 @@ export const config: Config = {
         cagrThreshold: 0,
         sharpeThreshold: 0.0,
         maxDDThreshold: 0.60,
-        priorityTicker: priorityTickerInput.trim() || undefined // Pass the user input
+        priorityTicker: undefined
       };
 
       let params: PortfolioParams = { ...defaultParams };
@@ -182,26 +137,6 @@ export const config: Config = {
           </ol>
         </div>
 
-        {/* --- 下載按鈕區域 --- */}
-        <div className="mb-4 p-3 bg-gray-800 border border-gray-600 rounded-lg flex flex-wrap items-center gap-4 shadow-inner">
-            <span className="text-sm font-bold text-gray-300 flex items-center">
-                <i className="fas fa-download mr-2 text-teal-400"></i> 下載部署檔案:
-            </span>
-            <button 
-                onClick={() => downloadFile('netlify.toml', netlifyTomlContent)}
-                className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-md font-bold transition-colors flex items-center gap-2"
-            >
-                <i className="fas fa-file-code"></i> netlify.toml
-            </button>
-            <button 
-                onClick={() => downloadFile('get_security_factor.mts', securityFunctionContent)}
-                className="bg-purple-600 hover:bg-purple-500 text-white text-sm px-4 py-2 rounded-md font-bold transition-colors flex items-center gap-2"
-            >
-                <i className="fas fa-file-shield"></i> get_security_factor.mts
-            </button>
-        </div>
-        {/* ------------------- */}
-
         <textarea
           id="pasteArea"
           className="w-full h-48 bg-gray-900 border border-gray-600 rounded-md p-3 font-mono text-sm text-gray-300 focus:ring-2 focus:ring-teal-400 focus:border-teal-400 transition"
@@ -209,24 +144,6 @@ export const config: Config = {
           value={pasteData}
           onChange={(e) => setPasteData(e.target.value)}
         />
-
-        {/* New Input for Priority Stock */}
-        <div className="mt-4 mb-2">
-            <label htmlFor="priorityTicker" className="block text-sm font-medium text-gray-300 mb-1">
-                <i className="fas fa-star text-yellow-500 mr-1"></i> 預設優先股代號 (可選):
-            </label>
-            <div className="relative">
-                <input
-                    id="priorityTicker"
-                    type="text"
-                    className="w-full md:w-1/3 bg-gray-900 border border-gray-600 rounded-md p-2 text-sm text-gray-300 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition placeholder-gray-600"
-                    placeholder="例如: AAPL 或 2330"
-                    value={priorityTickerInput}
-                    onChange={(e) => setPriorityTickerInput(e.target.value)}
-                />
-                <p className="text-xs text-gray-500 mt-1">若輸入，系統將在參數設定中自動將此股票設為優先股。</p>
-            </div>
-        </div>
 
         <div className="mt-4 flex gap-4">
           <button onClick={parsePastedData} className="flex-1 bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 flex items-center justify-center gap-2">

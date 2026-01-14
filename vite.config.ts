@@ -12,12 +12,15 @@ export default defineConfig({
     },
   },
   server: {
+    port: 44507,
+    strictPort: true,
+    host: true,
     proxy: {
       // 這段設定是為了讓前端能順利呼叫後端的 Netlify Function (如果有的話)
       '/.netlify/functions': {
         target: 'http://localhost:8888',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/\.netlify\/functions/, ''),
+        // 移除 rewrite，保留完整路徑給 netlify dev 處理
       },
     },
   },
