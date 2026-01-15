@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@vercel/node": "^5.5.20",
     "@vitejs/plugin-react": "^5.0.0",
     "assemblyscript": "^0.28.9",
     "netlify-cli": "^23.13.3",

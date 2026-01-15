@@ -64,8 +64,14 @@ const App: React.FC = () => {
   const checkUserStatus = async (email: string) => {
     console.log("🔍 開始檢查用戶狀態:", email);
     try {
-      // 使用相對路徑，但在開發環境下增加日誌
-      const apiUrl = `/.netlify/functions/check-user-status?email=${encodeURIComponent(email)}`;
+      // 自動偵測環境：Vercel 使用 /api/，Netlify 使用 /.netlify/functions/
+      const hostname = window.location.hostname;
+      const isVercel = hostname.includes('vercel.app') || hostname.includes('localhost') && !window.location.port;
+      const apiBase = isVercel ? '/api' : '/.netlify/functions';
+      
+      // Vercel 的 API 檔案名是 check-user-status.ts，所以路徑是 /api/check-user-status
+      const apiUrl = `${apiBase}/check-user-status?email=${encodeURIComponent(email)}`;
+      
       console.log("📡 呼叫 API:", apiUrl);
       
       const res = await fetch(apiUrl);
@@ -142,8 +148,10 @@ const App: React.FC = () => {
     // --- Step 6: 安全係數邏輯整合 (Security Factor Integration) ---
     let securityFactor = 1.0;
     try {
-        // 呼叫我們在 netlify/functions/get_security_factor.mts 建立的函數
-        const res = await fetch('/.netlify/functions/get_security_factor');
+        const isVercel = window.location.hostname.includes('vercel.app');
+        const apiPath = isVercel ? '/api/get_security_factor' : '/.netlify/functions/get_security_factor';
+        
+        const res = await fetch(apiPath);
         if (res.ok) {
             const data = await res.json();
             if (data && data.factor) {
