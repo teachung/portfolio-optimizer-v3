@@ -147,84 +147,168 @@ const RealTimePriceChecker: React.FC<{ weights: Record<string, number> }> = ({ w
     const [loading, setLoading] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<string | null>(null);
     const [investmentAmount, setInvestmentAmount] = useState<string>("100000");
+    
+    // Use a ref to cache prices across weight changes
+    const priceCache = useRef<Record<string, PriceInfo>>({});
+    const lastFetchTime = useRef<Record<string, number>>({});
 
-    const fetchAllPrices = async () => {
+    const fetchAllPrices = async (isManualRefresh = false) => {
         if (activeTickers.length === 0) return;
+        
+        // If not manual refresh, check if we already have all prices in cache and they are fresh (e.g. < 2 mins)
+        const now = Date.now();
+        const needsFetch = isManualRefresh ? activeTickers : activeTickers.filter(t => {
+            const lastFetch = lastFetchTime.current[t] || 0;
+            return !priceCache.current[t] || (now - lastFetch > 120000); // 2 minutes cache
+        });
+
+        if (needsFetch.length === 0) {
+            // All prices are already in cache, just update the state to ensure UI is in sync
+            const syncedPrices: Record<string, PriceInfo | null> = {};
+            activeTickers.forEach(t => {
+                syncedPrices[t] = priceCache.current[t] || null;
+            });
+            setPrices(syncedPrices);
+            return;
+        }
+
         setLoading(true);
+        
+        // Initialize newPrices with current cache for active tickers to prevent "flicker"
         const newPrices: Record<string, PriceInfo | null> = {};
+        activeTickers.forEach(t => {
+            newPrices[t] = priceCache.current[t] || null;
+        });
 
         const fetchOne = async (ticker: string) => {
              try {
                 const symbol = ticker.toUpperCase().replace(/\./g, '-');
-                // Use a different proxy or direct fetch if possible. 
-                // Yahoo Finance often blocks corsproxy.io. Trying a more robust approach.
-                const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`;
-                
-                // Try multiple proxies if one fails
-                const proxies = [
-                    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
-                    `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
-                    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
-                ];
+                let info: PriceInfo | null = null;
 
-                let data = null;
-                for (const proxy of proxies) {
-                    try {
-                        const res = await fetch(proxy);
-                        if (res.ok) {
+                // --- Source 1: Yahoo Finance (via Proxies) ---
+                const fetchYahoo = async (): Promise<PriceInfo | null> => {
+                    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`;
+                    const proxies = [
+                        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+                        `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+                        `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+                    ];
+
+                    for (const proxy of proxies) {
+                        try {
+                            const res = await fetch(proxy);
+                            if (!res.ok) continue;
                             const json = await res.json();
-                            // allorigins returns content as string in 'contents' field
-                            // codetabs and corsproxy.io return the JSON directly
                             let parsedData = json;
                             if (json && typeof json.contents === 'string') {
-                                try {
-                                    parsedData = JSON.parse(json.contents);
-                                } catch (parseErr) {
-                                    console.warn("Failed to parse allorigins contents", parseErr);
-                                }
+                                try { parsedData = JSON.parse(json.contents); } catch (e) { continue; }
                             }
                             
-                            if (parsedData?.chart?.result?.[0]?.meta) {
-                                data = parsedData;
-                                break;
+                            const meta = parsedData?.chart?.result?.[0]?.meta;
+                            if (meta && meta.regularMarketPrice) {
+                                return {
+                                    price: meta.regularMarketPrice,
+                                    change: meta.regularMarketPrice - meta.chartPreviousClose,
+                                    changePercent: (meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose * 100,
+                                    time: new Date(meta.regularMarketTime * 1000).toLocaleTimeString(),
+                                    currency: meta.currency || 'USD'
+                                };
                             }
-                        }
-                    } catch (e) {
-                        continue;
+                        } catch (e) { continue; }
                     }
+                    return null;
+                };
+
+                // --- Source 2: Finnhub (Backup) ---
+                const fetchFinnhub = async (): Promise<PriceInfo | null> => {
+                    try {
+                        // Using a public/shared key or common fallback if available
+                        // Note: In a production app, this should be in .env
+                        const token = 'sandbox_c8m0p2iad3ice092600g'; // Sandbox token as fallback or placeholder
+                        const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${token}`);
+                        if (!res.ok) return null;
+                        const data = await res.json();
+                        if (data && data.c) { // c = current price, pc = previous close
+                            return {
+                                price: data.c,
+                                change: data.d,
+                                changePercent: data.dp,
+                                time: new Date().toLocaleTimeString(),
+                                currency: 'USD'
+                            };
+                        }
+                    } catch (e) { return null; }
+                    return null;
+                };
+
+                // --- Source 3: Twelve Data (Backup via CORS Proxy) ---
+                const fetchTwelveData = async (): Promise<PriceInfo | null> => {
+                    try {
+                        const url = `https://api.twelvedata.com/price?symbol=${symbol}&apikey=demo`; // Demo key works for some major tickers
+                        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+                        if (!res.ok) return null;
+                        const data = await res.json();
+                        if (data && data.price) {
+                            return {
+                                price: parseFloat(data.price),
+                                change: 0,
+                                changePercent: 0,
+                                time: new Date().toLocaleTimeString(),
+                                currency: 'USD'
+                            };
+                        }
+                    } catch (e) { return null; }
+                    return null;
+                };
+
+                // Waterfall Execution
+                info = await fetchYahoo();
+                if (!info) {
+                    console.log(`Yahoo failed for ${ticker}, trying Finnhub...`);
+                    info = await fetchFinnhub();
                 }
-                
-                const meta = data?.chart?.result?.[0]?.meta;
-                
-                if (meta) {
-                    newPrices[ticker] = {
-                        price: meta.regularMarketPrice,
-                        change: meta.regularMarketPrice - meta.chartPreviousClose,
-                        changePercent: (meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose * 100,
-                        time: new Date(meta.regularMarketTime * 1000).toLocaleTimeString(),
-                        currency: meta.currency
-                    };
+                if (!info) {
+                    console.log(`Finnhub failed for ${ticker}, trying TwelveData...`);
+                    info = await fetchTwelveData();
+                }
+
+                if (info) {
+                    newPrices[ticker] = info;
+                    priceCache.current[ticker] = info;
+                    lastFetchTime.current[ticker] = Date.now();
                 } else {
-                    // Fallback to a secondary source if Yahoo fails (e.g. Finnhub or similar if API key available)
-                    // For now, mark as error but try to keep UI clean
-                    newPrices[ticker] = { price: 0, change: 0, changePercent: 0, time: '-', currency: '', error: true };
+                    if (!priceCache.current[ticker]) {
+                        newPrices[ticker] = { price: 0, change: 0, changePercent: 0, time: '-', currency: '', error: true };
+                    }
                 }
              } catch (e) {
                  console.error(`Error fetching ${ticker}`, e);
-                 newPrices[ticker] = { price: 0, change: 0, changePercent: 0, time: '-', currency: '', error: true };
+                 if (!priceCache.current[ticker]) {
+                    newPrices[ticker] = { price: 0, change: 0, changePercent: 0, time: '-', currency: '', error: true };
+                 }
              }
         };
 
-        // Batch requests to avoid browser limit, though activeTickers is already capped
-        await Promise.all(activeTickers.map(t => fetchOne(t)));
+        // Batch requests
+        await Promise.all(needsFetch.map(t => fetchOne(t)));
         
-        setPrices(newPrices);
+        setPrices({...newPrices});
         setLastUpdated(new Date().toLocaleTimeString());
         setLoading(false);
     };
 
     useEffect(() => {
-        fetchAllPrices();
+        let isMounted = true;
+        
+        const runFetch = async () => {
+            await fetchAllPrices(false);
+        };
+        
+        runFetch();
+        
+        return () => {
+            isMounted = false;
+        };
     }, [activeTickers]);
 
     // Calculate Shares and Formula
@@ -285,7 +369,7 @@ const RealTimePriceChecker: React.FC<{ weights: Record<string, number> }> = ({ w
                              <i className="fas fa-clock mr-1"></i>更新: {lastUpdated || '-'}
                          </div>
                          <button 
-                            onClick={fetchAllPrices}
+                            onClick={() => fetchAllPrices(true)}
                             disabled={loading}
                             className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1 ${loading ? 'bg-gray-600 cursor-not-allowed' : 'bg-green-600 hover:bg-green-500 text-white'}`}
                          >
@@ -1604,7 +1688,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, settings, stock
                  <div className="flex flex-wrap gap-2 text-xs mb-4">
                     <span className="text-gray-400 mr-2 flex items-center"><i className="fas fa-layer-group mr-1"></i>疊加個股 (Top {activeTickers.length}):</span>
                     {activeTickers.map((t) => (
-                        <button key={t} onClick={() => toggleComparison(t)} style={{ borderColor: comparisonTickers.has(t) ? tickerColorMap[t as string] : 'rgb(55, 65, 81)', color: comparisonTickers.has(t) ? tickerColorMap[t as string] : 'rgb(107, 114, 128)', backgroundColor: comparisonTickers.has(t) ? 'rgba(55, 65, 81, 0.3)' : 'transparent' }} className="px-2 py-1 rounded border transition-colors hover:border-gray-500">
+                        <button key={t} onClick={() => toggleComparison(t)} style={{ borderColor: comparisonTickers.has(t) ? (tickerColorMap as Record<string, string>)[t] : 'rgb(55, 65, 81)', color: comparisonTickers.has(t) ? (tickerColorMap as Record<string, string>)[t] : 'rgb(107, 114, 128)', backgroundColor: comparisonTickers.has(t) ? 'rgba(55, 65, 81, 0.3)' : 'transparent' }} className="px-2 py-1 rounded border transition-colors hover:border-gray-500">
                             {t}
                         </button>
                     ))}
