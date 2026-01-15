@@ -62,10 +62,52 @@ export default async function handler(
         status: user.Status
       });
     } else {
-      return res.status(200).json({
-        approved: false,
-        status: 'Not Found'
-      });
+      // 用户不在 Airtable 中，自动创建记录（状态为 Pending）
+      console.error(`[Debug] User not found in Airtable. Auto-registering: ${email}`);
+      
+      try {
+        const createResponse = await fetch(
+          `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              fields: {
+                Email: email,
+                Status: 'Pending',
+              },
+            }),
+          }
+        );
+
+        const createData = await createResponse.json();
+        console.error(`[Debug] Auto-registration result: ${JSON.stringify(createData)}`);
+
+        if (createResponse.ok) {
+          return res.status(200).json({
+            approved: false,
+            status: 'Pending',
+            message: 'Account created. Awaiting admin approval.'
+          });
+        } else {
+          console.error(`[Error] Failed to create user in Airtable: ${JSON.stringify(createData)}`);
+          return res.status(200).json({
+            approved: false,
+            status: 'Error',
+            message: 'Failed to create account. Please contact admin.'
+          });
+        }
+      } catch (createError) {
+        console.error(`[Error] Exception during auto-registration:`, createError);
+        return res.status(200).json({
+          approved: false,
+          status: 'Not Found',
+          message: 'User not found and auto-registration failed.'
+        });
+      }
     }
   } catch (error) {
     console.error('Error fetching user status:', error);

@@ -8,8 +8,8 @@ const Pending: React.FC = () => {
         <div className="text-yellow-500 text-6xl mb-4">⏳</div>
         <h2 className="text-2xl font-bold mb-4">後台正在確認中</h2>
         <p className="text-gray-400 mb-6">
-          您的帳號已成功登入，但管理員尚未開通權限。<br/>
-          請在確認支付會員費後稍候，或聯繫管理員。
+          您的帳號已成功登入並自動註冊，但管理員尚未開通權限。<br/>
+          請在確認支付會員費後稍候，或聯繫管理員批准您的帳號。
         </p>
         <button
           onClick={() => auth.signOut()}
