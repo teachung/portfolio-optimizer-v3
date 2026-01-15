@@ -43,12 +43,12 @@ export default async function handler(
     if (data.records && data.records.length > 0) {
       const user = data.records[0].fields;
       return res.status(200).json({
-        isApproved: user.Status === 'Approved',
+        approved: user.Status === 'Approved',
         status: user.Status
       });
     } else {
       return res.status(200).json({
-        isApproved: false,
+        approved: false,
         status: 'Not Found'
       });
     }
