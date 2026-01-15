@@ -18,11 +18,17 @@
 ## 3. Auto-Registration Flow
 When a user signs in via Firebase:
 1. `api/check-user-status.ts` queries Airtable for the user's email.
-2. **If found**: Returns the user's current status (`Approved` or `Pending`).
+2. **If found**: Returns the user's current status based on the `Status` field (boolean):
+   - `Status = true`: User is Approved
+   - `Status = false`: User is Pending
 3. **If not found**: Automatically creates a new record in Airtable with:
    - `Email`: User's email from Firebase
-   - `Status`: `Pending`
+   - `Status`: `false` (boolean value for Pending)
 4. The user sees the "Pending" screen and must wait for admin approval.
+
+**IMPORTANT**: The Airtable `Status` field is a **checkbox/boolean** field, NOT a text field:
+- `true` = Approved (checkbox checked)
+- `false` = Pending (checkbox unchecked)
 
 ### Debugging
 Enhanced logging is available in `api/check-user-status.ts`:
@@ -36,7 +42,10 @@ Enhanced logging is available in `api/check-user-status.ts`:
 - **Airtable**:
   - Base ID: `app7BB9VmwXmVov5c`
   - Table Name: `Users`
-  - Expected Columns: `Email` (or `email`), `Status` (must be `Approved`).
+  - Expected Columns: 
+    - `Email` (Single line text field)
+    - `Status` (Checkbox field - boolean: checked = Approved, unchecked = Pending)
+    - `LastLogin` (Optional - Date field)
 - **Firebase**:
   - Ensure `portfolioblender.vercel.app` is added to **Authorized Domains** in Firebase Console.
 
@@ -44,9 +53,9 @@ Enhanced logging is available in `api/check-user-status.ts`:
 To approve new users:
 1. Go to your Airtable base: `app7BB9VmwXmVov5c`
 2. Open the `Users` table
-3. Find users with `Status = Pending`
-4. Change their `Status` to `Approved`
-5. Users can now access the portfolio optimizer on their next login
+3. Find users with unchecked `Status` checkbox (= Pending)
+4. **Check the `Status` checkbox** to approve them (checked = Approved)
+5. Users can now access the portfolio optimizer on their next login/refresh
 
 ## 6. Completed Tasks
 - [x] Fixed real-time stock price fetching with multi-proxy fallback

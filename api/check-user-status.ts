@@ -55,11 +55,12 @@ export default async function handler(
       const user = data.records[0].fields;
       console.error(`[Debug] User found in Airtable. Status: "${user.Status}"`);
       
-      const isApproved = String(user.Status).trim().toLowerCase() === 'approved';
+      // Status 是布尔值：true = Approved, false = Pending
+      const isApproved = user.Status === true;
       
       return res.status(200).json({
         approved: isApproved,
-        status: user.Status
+        status: isApproved ? 'Approved' : 'Pending'
       });
     } else {
       // 用户不在 Airtable 中，自动创建记录（状态为 Pending）
@@ -77,7 +78,7 @@ export default async function handler(
             body: JSON.stringify({
               fields: {
                 Email: email,
-                Status: 'Pending',
+                Status: false, // false = Pending, true = Approved
               },
             }),
           }
