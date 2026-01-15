@@ -66,8 +66,9 @@ const App: React.FC = () => {
     try {
       // 自動偵測環境：Vercel 使用 /api/，Netlify 使用 /.netlify/functions/
       const hostname = window.location.hostname;
-      const isVercel = hostname.includes('vercel.app') || hostname.includes('localhost') && !window.location.port;
-      const apiBase = isVercel ? '/api' : '/.netlify/functions';
+      // 只要不是 netlify.app 且不是 localhost:8888，就優先嘗試 Vercel 的 /api 路径
+      const isNetlify = hostname.includes('netlify.app') || (hostname === 'localhost' && window.location.port === '8888');
+      const apiBase = isNetlify ? '/.netlify/functions' : '/api';
       
       // Vercel 的 API 檔案名是 check-user-status.ts，所以路徑是 /api/check-user-status
       const apiUrl = `${apiBase}/check-user-status?email=${encodeURIComponent(email)}`;
