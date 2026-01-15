@@ -149,8 +149,9 @@ const App: React.FC = () => {
     // --- Step 6: 安全係數邏輯整合 (Security Factor Integration) ---
     let securityFactor = 1.0;
     try {
-        const isVercel = window.location.hostname.includes('vercel.app');
-        const apiPath = isVercel ? '/api/get_security_factor' : '/.netlify/functions/get_security_factor';
+        const hostname = window.location.hostname;
+        const isNetlify = hostname.includes('netlify.app') || (hostname === 'localhost' && window.location.port === '8888');
+        const apiPath = isNetlify ? '/.netlify/functions/get_security_factor' : '/api/get_security_factor';
         
         const res = await fetch(apiPath);
         if (res.ok) {
