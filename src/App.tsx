@@ -89,9 +89,19 @@ const App: React.FC = () => {
         }
       } else {
         const errorText = await res.text();
-        console.error("❌ API 報錯:", errorText);
-        // 如果 API 報錯（例如 404），我們暫時不讓用戶進去，但要報警
-        alert(`後端連線失敗 (${res.status})，請確保您是使用 8888 端口訪問`);
+        console.error("❌ API 報錯 (狀態碼:", res.status, "):", errorText);
+        
+        // 改進的錯誤處理：提供更清晰的指引
+        if (res.status === 404) {
+          console.error("API 端點不存在，請檢查部署配置");
+          alert(`API 端點未找到。請確認：\n1. 使用正確的 URL: https://portfolioblender.vercel.app\n2. Vercel 部署是否成功\n3. 清除瀏覽器緩存後重試`);
+        } else if (res.status === 500) {
+          console.error("伺服器內部錯誤");
+          alert(`後端伺服器錯誤 (${res.status})。請稍後再試或聯繫管理員。`);
+        } else {
+          console.error("未預期的 API 錯誤");
+          alert(`後端連線異常 (${res.status})。\n請確認使用正確的 URL: https://portfolioblender.vercel.app\n並清除瀏覽器緩存後重試。`);
+        }
         setIsApproved(false);
       }
     } catch (e) {
