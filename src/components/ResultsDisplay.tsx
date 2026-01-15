@@ -155,16 +155,46 @@ const RealTimePriceChecker: React.FC<{ weights: Record<string, number> }> = ({ w
 
         const fetchOne = async (ticker: string) => {
              try {
-                // Yahoo Finance symbol normalization (replace . with -)
                 const symbol = ticker.toUpperCase().replace(/\./g, '-');
+                // Use a different proxy or direct fetch if possible. 
+                // Yahoo Finance often blocks corsproxy.io. Trying a more robust approach.
                 const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`;
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
                 
-                const res = await fetch(proxyUrl);
-                if (!res.ok) throw new Error("Network");
+                // Try multiple proxies if one fails
+                const proxies = [
+                    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+                    `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+                    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+                ];
+
+                let data = null;
+                for (const proxy of proxies) {
+                    try {
+                        const res = await fetch(proxy);
+                        if (res.ok) {
+                            const json = await res.json();
+                            // allorigins returns content as string in 'contents' field
+                            // codetabs and corsproxy.io return the JSON directly
+                            let parsedData = json;
+                            if (json && typeof json.contents === 'string') {
+                                try {
+                                    parsedData = JSON.parse(json.contents);
+                                } catch (parseErr) {
+                                    console.warn("Failed to parse allorigins contents", parseErr);
+                                }
+                            }
+                            
+                            if (parsedData?.chart?.result?.[0]?.meta) {
+                                data = parsedData;
+                                break;
+                            }
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
                 
-                const data = await res.json();
-                const meta = data.chart?.result?.[0]?.meta;
+                const meta = data?.chart?.result?.[0]?.meta;
                 
                 if (meta) {
                     newPrices[ticker] = {
@@ -175,6 +205,8 @@ const RealTimePriceChecker: React.FC<{ weights: Record<string, number> }> = ({ w
                         currency: meta.currency
                     };
                 } else {
+                    // Fallback to a secondary source if Yahoo fails (e.g. Finnhub or similar if API key available)
+                    // For now, mark as error but try to keep UI clean
                     newPrices[ticker] = { price: 0, change: 0, changePercent: 0, time: '-', currency: '', error: true };
                 }
              } catch (e) {
