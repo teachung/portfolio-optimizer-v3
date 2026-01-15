@@ -28,22 +28,37 @@ export default async function handler(
   const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
   const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME || 'Users';
 
-  try {
-    const response = await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}?filterByFormula={Email}='${email}'`,
-      {
-        headers: {
-          Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        },
-      }
-    );
+  // 使用 console.error 確保日誌在 Vercel 級別更高，更容易被看到
+  console.error(`[Debug] Checking status for: ${email}`);
+  console.error(`[Debug] Config check: KEY=${!!AIRTABLE_API_KEY}, BASE=${!!AIRTABLE_BASE_ID}, TABLE=${AIRTABLE_TABLE_NAME}`);
 
-    const data = await response.json();
+  try {
+    // 1. 增加對 Email 欄位名稱的容錯，並對 email 進行編碼以防特殊字符
+    const encodedEmail = encodeURIComponent(email);
+    const filterFormula = encodeURIComponent(`OR({Email}='${email}',{email}='${email}')`);
+    const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}?filterByFormula=${filterFormula}`;
+    
+    console.error(`[Debug] Target Email: ${email}`);
+    console.error(`[Debug] Full Airtable URL: ${airtableUrl}`);
+
+    const response = await fetch(airtableUrl, {
+      headers: {
+        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+      },
+    });
+
+    const data = await response.json() as any;
+    console.error(`[Debug] Airtable Status: ${response.status}`);
+    console.error(`[Debug] Airtable Raw Data: ${JSON.stringify(data)}`);
 
     if (data.records && data.records.length > 0) {
       const user = data.records[0].fields;
+      console.error(`[Debug] User found in Airtable. Status: "${user.Status}"`);
+      
+      const isApproved = String(user.Status).trim().toLowerCase() === 'approved';
+      
       return res.status(200).json({
-        approved: user.Status === 'Approved',
+        approved: isApproved,
         status: user.Status
       });
     } else {

@@ -71,8 +71,9 @@ const App: React.FC = () => {
       const apiBase = isNetlify ? '/.netlify/functions' : '/api';
       
       // Vercel 的 API 檔案名是 check-user-status.ts，所以路徑是 /api/check-user-status
-      const apiUrl = `${apiBase}/check-user-status?email=${encodeURIComponent(email)}`;
-      
+      // 加入 t= 時間戳防止瀏覽器緩存
+      const apiUrl = `${apiBase}/check-user-status?email=${encodeURIComponent(email)}&t=${Date.now()}`;
+
       console.log("📡 呼叫 API:", apiUrl);
       
       const res = await fetch(apiUrl);
