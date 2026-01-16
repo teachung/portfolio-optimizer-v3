@@ -190,51 +190,40 @@ export const createWorkerCode = () => {
                         }
                         break;
                     case 'ultra_smooth':
-                        const stability = calculateStabilityScore(pValues);
-                        if (stability.disqualified) {
-                            score = -9999;
+                        if (wasmModule) {
+                            score = wasmModule.calculateStabilityV2Score(
+                                pValues,
+                                metrics.cagr,
+                                isAuthorized
+                            );
                         } else {
-                            if (wasmModule) {
-                                score = wasmModule.calculateStabilityV2Score(
-                                    stability.metrics.channelConsistency || 0,
-                                    metrics.maxDD || 0,
-                                    metrics.volatility || 0,
-                                    isAuthorized
-                                );
-                            } else {
-                                score = stability.score;
-                            }
-                            metrics.smoothness = stability.metrics.channelConsistency; 
+                            const stability = calculateStabilityScore(pValues);
+                            score = stability.disqualified ? -9999 : stability.score;
                         }
                         break;
                     case 'super_ai_v2':
-                        const totalDaysHint = years * 365;
-                        const v2Result = calculateSuperAI_v2_adaptive({
-                            portfolioValues: pValues,
-                            frequency: 'auto',
-                            totalDaysHint: totalDaysHint
-                        }, {
-                            maxAllowedDrawdown: 0.25,
-                            minRequiredAnnualReturn: 0.05,
-                            minSmoothness: 0.85
-                        });
-                        
-                        if (v2Result.disqualified) {
-                            score = v2Result.score;
+                        if (wasmModule) {
+                            score = wasmModule.calculateSuperAI_v2(
+                                pValues,
+                                dailyReturns,
+                                metrics.sortino,
+                                metrics.calmar,
+                                metrics.maxDD,
+                                metrics.cagr,
+                                isAuthorized
+                            );
                         } else {
-                            if (wasmModule) {
-                                score = wasmModule.calculateSuperAIScore(
-                                    v2Result.metrics.sortino,
-                                    v2Result.metrics.calmar,
-                                    v2Result.metrics.smoothness,
-                                    v2Result.metrics.channelComponent || 0.9,
-                                    isAuthorized
-                                );
-                            } else {
-                                score = v2Result.score;
-                            }
-                            metrics.smoothness = v2Result.metrics.smoothness;
-                            metrics.sortino = v2Result.metrics.sortino;
+                            const totalDaysHint = years * 365;
+                            const v2Result = calculateSuperAI_v2_adaptive({
+                                portfolioValues: pValues,
+                                frequency: 'auto',
+                                totalDaysHint: totalDaysHint
+                            }, {
+                                maxAllowedDrawdown: 0.25,
+                                minRequiredAnnualReturn: 0.05,
+                                minSmoothness: 0.85
+                            });
+                            score = v2Result.score;
                         }
                         break;
                     case 'target_return_mindd':
