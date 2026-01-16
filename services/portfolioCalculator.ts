@@ -505,18 +505,21 @@ export function generateDiscreteWeights(
 export function mutateWeights(
     weights: Record<string, number>, 
     maxWeight: number, 
-    mutationRate: number = 0.1,
+    mutationRate: number = 0.15,  // 专家建议：从 0.2 降至 0.15
     minWeight: number = 0
 ): Record<string, number> {
     const newWeights = { ...weights };
     const tickers = Object.keys(newWeights);
     
     if (Math.random() < mutationRate && tickers.length > 0) {
-        // ENHANCED MUTATION: 50% chance of Swap, 50% chance of Uniform Reset
+        // 专家建议：增强变异多样性
+        // 40% Swap Mutation (权重交换)
+        // 40% Uniform Reset (完全随机重置)
+        // 20% Micro Adjustment (微调)
         const type = Math.random();
         
-        if (type < 0.5 && tickers.length > 1) {
-            // Swap Mutation
+        if (type < 0.4 && tickers.length > 1) {
+            // Swap Mutation: 两只股票权重互换
             const idx1 = Math.floor(Math.random() * tickers.length);
             let idx2 = Math.floor(Math.random() * tickers.length);
             while(idx1 === idx2) idx2 = Math.floor(Math.random() * tickers.length);
@@ -528,12 +531,19 @@ export function mutateWeights(
             
             newWeights[ticker1] -= amount;
             newWeights[ticker2] += amount;
-        } else {
-            // Uniform / Reset Mutation
+        } else if (type < 0.8) {
+            // Uniform Reset: 完全随机重置某股票权重
+            // 专家建议：20% 机率让某一隻股票的權重完全隨機化
             const idx = Math.floor(Math.random() * tickers.length);
             const ticker = tickers[idx];
             const newW = Math.random() * (maxWeight - minWeight) + minWeight;
             newWeights[ticker] = newW;
+        } else {
+            // Micro Adjustment: 小幅微调
+            const idx = Math.floor(Math.random() * tickers.length);
+            const ticker = tickers[idx];
+            const adjustment = (Math.random() - 0.5) * 0.02; // ±1%
+            newWeights[ticker] = Math.max(minWeight, Math.min(maxWeight, newWeights[ticker] + adjustment));
         }
     }
 

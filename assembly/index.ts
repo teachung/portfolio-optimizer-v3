@@ -200,22 +200,26 @@ export function calculateStabilityV2Score(
   let slope = (f64(n) * sumXY - sumX * sumY) / (f64(n) * sumXX - sumX * sumX);
   let intercept = (sumY - slope * sumX) / f64(n);
 
-  // 3. Residuals & Symmetric Ulcer Index
-  let percentageDeviations: f64[] = new Array<f64>(n);
+  // 3. Log Residuals & Symmetric Ulcer Index
+  // 专家建议：使用对数残差而非百分比偏离，因为对数空间下的距离
+  // 才是数学上最纯粹的"直线平滑度"衡量标准
+  let logResiduals: f64[] = new Array<f64>(n);
   let sumSqDev: f64 = 0;
   let withinChannelCount: f64 = 0;
   let maxResidual: f64 = 0;
 
   for (let i = 0; i < n; i++) {
-    let trendVal = Math.exp(intercept + slope * f64(i));
-    if (trendVal <= 0.0001) trendVal = 0.0001;
+    let actualLog = portfolioValues[i] > 0 ? Math.log(portfolioValues[i]) : 0;
+    let trendLog = intercept + slope * f64(i);
     
-    let deviation = Math.abs((portfolioValues[i] - trendVal) / trendVal);
-    percentageDeviations[i] = deviation;
-    sumSqDev += deviation * deviation;
+    // 对数残差：Math.abs(Math.log(actual) - Math.log(trend))
+    let residual = Math.abs(actualLog - trendLog);
+    logResiduals[i] = residual;
+    sumSqDev += residual * residual;
     
-    if (deviation <= 0.03) withinChannelCount += 1.0;
-    if (deviation > maxResidual) maxResidual = deviation;
+    // 通道宽度在对数空间：0.03 对应约 3% 的百分比偏离
+    if (residual <= 0.03) withinChannelCount += 1.0;
+    if (residual > maxResidual) maxResidual = residual;
   }
 
   let symmetricUlcerIndex = Math.sqrt(sumSqDev / f64(n));
@@ -244,26 +248,31 @@ export function calculateStabilityV2Score(
     }
   }
 
-  // 5. Penalties
-  let residualPenalty: f64 = 1.0;
-  if (maxResidual > 0.05) {
-    residualPenalty = Math.max(0.0, 1.0 - (maxResidual - 0.05) * 5.0);
-  }
-  
-  let volatilityPenalty: f64 = 1.0;
-  if (maxRollingStdDev > 0.02) {
-    volatilityPenalty = Math.max(0.0, 1.0 - (maxRollingStdDev - 0.02) * 10.0);
-  }
+  // 5. Strict Gatekeeping (Hard Thresholds)
+  // 专家建议：在评分前先淘汰不合格组合
+  if (maxDown < -0.10) return -1000.0; // 单日跌幅 > 10% 直接淘汰
 
-  // 6. Final Score (完整公式)
+  // 6. Exponential Decay Penalties (指数衰减惩罚)
+  // 专家建议：使用指数函数而非线性，实现更严格的惩罚
+  let rPenalty: f64 = maxResidual > 0.05 
+    ? Math.exp(-(maxResidual - 0.05) * 20.0) 
+    : 1.0;
+  
+  let vPenalty: f64 = maxRollingStdDev > 0.02 
+    ? Math.exp(-(maxRollingStdDev - 0.02) * 50.0) 
+    : 1.0;
+
+  // 7. Geometric Product Scoring (几何乘积评分)
+  // 专家建议：改用幾何權重合成，實現「一票否決」機制
   if (symmetricUlcerIndex < 0.0001) symmetricUlcerIndex = 0.0001;
   
-  let baseScore = annualizedReturn / symmetricUlcerIndex;
-  let finalScore = baseScore 
-    * (residualPenalty * 0.6 + volatilityPenalty * 0.4)
-    * (0.5 + 0.5 * channelConsistency);
+  let finalScore = Math.pow(annualizedReturn, 0.4) * 
+                   Math.pow(1.0 / (symmetricUlcerIndex + 0.01), 0.4) * 
+                   Math.pow(rPenalty, 0.1) * 
+                   Math.pow(channelConsistency, 0.1) * 
+                   100.0;
 
-  return Math.max(0.0, finalScore);
+  return finalScore;
 }
 
 /**
