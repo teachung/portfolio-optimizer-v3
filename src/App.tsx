@@ -13,9 +13,10 @@ import { auth } from './firebase';
 import { onAuthStateChanged, User, getRedirectResult } from 'firebase/auth';
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isApproved, setIsApproved] = useState<boolean>(false);
-  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  // 暫時跳過登入邏輯以進行算法測試
+  const [user, setUser] = useState<User | null>({ email: 'test-user@example.com' } as User);
+  const [isApproved, setIsApproved] = useState<boolean>(true);
+  const [authLoading, setAuthLoading] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<Tab>(Tab.Data);
 
   // 處理重定向結果與監聽 Firebase 登入狀態
