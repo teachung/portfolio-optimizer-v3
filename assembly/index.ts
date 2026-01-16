@@ -127,24 +127,37 @@ export function calculateSuperAI_v2(
 ): f64 {
   if (isAuthorized != 1) return -99999.0;
 
-  // 1. Gatekeeping (v3.4 Manual)
+  // 1. Metrics & Base Components
   let smoothness = calculateRSquared(portfolioValues);
-  if (maxDD > 0.25) return -9000.0;
-  if (annualReturn < 0.05) return -9001.0;
-  if (smoothness < 0.85) return -9003.0;
+  
+  // Soft Penalties instead of Hard Gatekeeping during search
+  let penalty: f64 = 1.0;
+  if (maxDD > 0.25) {
+    penalty *= Math.exp(-(maxDD - 0.25) * 10.0); // Gradual decay
+  }
+  if (annualReturn < 0.05) {
+    penalty *= 0.5; 
+  }
+  if (smoothness < 0.80) {
+    penalty *= Math.pow(smoothness / 0.80, 2);
+  }
 
-  // 2. Components
-  let returnComponent = saturate(sortino, 4.0);
-  let riskComponent = saturate(calmar, 4.0) * calculateCVaRPenalty(returns);
+  // 2. Components (Saturated to 0~1 range)
+  let returnComponent = saturate(sortino, 3.0); // Slightly more sensitive
+  let riskComponent = saturate(calmar, 3.0) * calculateCVaRPenalty(returns);
   let stabilityComponent = Math.pow(smoothness, 2);
   let channelComponent = calculateChannelScore(portfolioValues);
 
-  // 3. Geometric Product Scoring
-  let score = Math.pow(returnComponent, 0.4) *
-              Math.pow(riskComponent, 0.3) *
-              Math.pow(stabilityComponent, 0.2) *
-              Math.pow(channelComponent, 0.1) *
-              100.0;
+  // 3. Geometric Product Scoring with Penalty
+  // We use a small epsilon (0.01) to prevent total score collapse
+  let score = Math.pow(returnComponent + 0.01, 0.4) *
+              Math.pow(riskComponent + 0.01, 0.3) *
+              Math.pow(stabilityComponent + 0.01, 0.2) *
+              Math.pow(channelComponent + 0.01, 0.1) *
+              100.0 * penalty;
+
+  // Final check for extreme failure
+  if (maxDD > 0.50 || annualReturn < 0) return -9999.0;
 
   return score;
 }
