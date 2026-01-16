@@ -114,7 +114,8 @@ function calculateChannelScore(values: f64[]): f64 {
 }
 
 /**
- * 🤖 Super AI Optimization v2.0 (Hexagon Warrior)
+ * 🤖 Super AI Optimization v3.0 (Stability First - Hexagon Warrior)
+ * Optimized for "Extreme Stability" and "Genetic Diversity"
  */
 export function calculateSuperAI_v2(
   portfolioValues: f64[],
@@ -130,34 +131,41 @@ export function calculateSuperAI_v2(
   // 1. Metrics & Base Components
   let smoothness = calculateRSquared(portfolioValues);
   
-  // Soft Penalties instead of Hard Gatekeeping during search
+  // 🛡️ Aggressive Stability Penalties
   let penalty: f64 = 1.0;
-  if (maxDD > 0.25) {
-    penalty *= Math.exp(-(maxDD - 0.25) * 10.0); // Gradual decay
+  
+  // MaxDD Penalty: Start decaying at 15%, heavy penalty after 20%
+  if (maxDD > 0.15) {
+    penalty *= Math.exp(-(maxDD - 0.15) * 15.0); 
   }
-  if (annualReturn < 0.05) {
-    penalty *= 0.5; 
+  
+  // Annual Return Penalty: Must be positive, but don't over-chase high returns
+  if (annualReturn < 0.02) {
+    penalty *= 0.1; // Heavy penalty for near-zero or negative returns
   }
-  if (smoothness < 0.80) {
-    penalty *= Math.pow(smoothness / 0.80, 2);
+
+  // Smoothness Penalty: Stability is non-negotiable for "Extreme Stability"
+  if (smoothness < 0.85) {
+    penalty *= Math.pow(smoothness / 0.85, 3);
   }
 
   // 2. Components (Saturated to 0~1 range)
-  let returnComponent = saturate(sortino, 3.0); // Slightly more sensitive
-  let riskComponent = saturate(calmar, 3.0) * calculateCVaRPenalty(returns);
-  let stabilityComponent = Math.pow(smoothness, 2);
+  // For Stability Mode, we use different saturation scales
+  let returnComponent = saturate(sortino, 4.0);    // Lower sensitivity to high returns
+  let riskComponent = saturate(calmar, 2.0) * calculateCVaRPenalty(returns); // Higher sensitivity to risk
+  let stabilityComponent = Math.pow(smoothness, 3); // Cubic weight for smoothness
   let channelComponent = calculateChannelScore(portfolioValues);
 
-  // 3. Geometric Product Scoring with Penalty
-  // We use a small epsilon (0.01) to prevent total score collapse
-  let score = Math.pow(returnComponent + 0.01, 0.4) *
-              Math.pow(riskComponent + 0.01, 0.3) *
-              Math.pow(stabilityComponent + 0.01, 0.2) *
+  // 3. Geometric Product Scoring (Weighted for Stability)
+  // Weights: Risk(0.4) + Stability(0.3) + Return(0.2) + Channel(0.1) = 1.0
+  let score = Math.pow(riskComponent + 0.01, 0.4) *
+              Math.pow(stabilityComponent + 0.01, 0.3) *
+              Math.pow(returnComponent + 0.01, 0.2) *
               Math.pow(channelComponent + 0.01, 0.1) *
               100.0 * penalty;
 
-  // Final check for extreme failure
-  if (maxDD > 0.50 || annualReturn < 0) return -9999.0;
+  // Final check for extreme failure (Hard Floor)
+  if (maxDD > 0.40 || annualReturn < -0.05) return -9999.0;
 
   return score;
 }
