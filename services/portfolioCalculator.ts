@@ -987,18 +987,34 @@ export function calculateStabilityScore(portfolioValues: number[]) {
         trendLine.push(Math.exp(intercept + slope * i));
     }
 
-    // 4. Residuals & Ulcer Index
+    // 4. Residuals & Ulcer Index & Current Position (Z-Score)
     const percentageDeviations: number[] = [];
+    const signedDeviations: number[] = []; // For Z-Score calculation
+
     for (let i = 0; i < n; i++) {
         const trendVal = trendLine[i];
         if (trendVal <= 0.0001) {
              percentageDeviations.push(1); // Edge case protection
+             signedDeviations.push(0);
              continue;
         }
         const deviation = values[i] - trendVal;
         const percentDeviation = Math.abs(deviation / trendVal);
+        
+        // Signed percentage deviation for Z-Score
+        signedDeviations.push(deviation / trendVal);
         percentageDeviations.push(percentDeviation);
     }
+
+    // Calculate Z-Score of the CURRENT (last) price
+    const meanDeviation = signedDeviations.reduce((a,b) => a + b, 0) / n;
+    const devVariance = signedDeviations.reduce((a,b) => a + Math.pow(b - meanDeviation, 2), 0) / n;
+    const devStdDev = Math.sqrt(devVariance);
+    
+    // Z-Score = (LastDeviation - MeanDeviation) / StdDev. 
+    // Usually MeanDeviation is close to 0 in regression, but we include it for precision.
+    const lastSignedDev = signedDeviations[n-1];
+    const currentZScore = devStdDev > 0.000001 ? (lastSignedDev - meanDeviation) / devStdDev : 0;
 
     const maxResidual = Math.max(...percentageDeviations);
     const sumSquaredDeviations = percentageDeviations.reduce((sum, d) => sum + d * d, 0);
@@ -1041,7 +1057,8 @@ export function calculateStabilityScore(portfolioValues: number[]) {
             symmetricUlcerIndex,
             maxResidual,
             maxRollingStdDev,
-            channelConsistency
+            channelConsistency,
+            currentZScore // Return this for V3 algorithm to use
         },
         disqualified: false
     };

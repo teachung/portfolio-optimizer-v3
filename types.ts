@@ -65,6 +65,7 @@ export interface Metrics {
   maxResidual?: number;
   maxRollingStdDev?: number;
   channelConsistency?: number;
+  currentZScore?: number; // Added for V3 algorithm
 }
 
 export interface StockMetrics extends Metrics {
@@ -84,6 +85,7 @@ export interface ScatterPoint {
     metrics: Metrics;
     score?: number;
     label?: string;
+    portfolioValues?: (number | null)[];
 }
 
 export interface OptimizationResult {

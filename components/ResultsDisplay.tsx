@@ -1,5 +1,6 @@
+
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { Chart, registerables, Plugin, InteractionItem, ActiveElement } from 'chart.js';
+import { Chart, registerables, Plugin, InteractionItem } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { OptimizationResult, OptimizationSettings, StockData, ScatterPoint, Metrics, StockMetrics, MonthlyReturn } from '../types';
 import { calculatePortfolioPerformance, calculateMonthlyReturns, calculateAssetRotation, calculateCurrentCyclePositions, sliceStockData, calculateMetrics } from '../services/portfolioCalculator';
@@ -481,7 +482,7 @@ const MarketCycleClock: React.FC<{ weights: Record<string, number>, stockData: S
 const cashPeriodsPlugin = (cashPeriods?: { start: number; end: number }[], highlightRanges?: { start: string, end: string }[], dates?: string[]): Plugin => ({
     id: 'cashPeriodsPlugin',
     beforeDraw: (chart) => {
-        const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
+        const { ctx, chartArea: { top, bottom, left, right }, scales: { x } } = chart;
         
         // 1. Draw Cash Periods
         if (cashPeriods && cashPeriods.length > 0) {
@@ -497,25 +498,51 @@ const cashPeriodsPlugin = (cashPeriods?: { start: number; end: number }[], highl
             ctx.restore();
         }
 
-        // 2. Draw Highlight Ranges
-        if (highlightRanges && highlightRanges.length > 0 && dates) {
+        // 2. Draw Highlight Ranges (Stress Test Box)
+        if (highlightRanges && highlightRanges.length > 0 && dates && dates.length > 0) {
             ctx.save();
             highlightRanges.forEach((range, idx) => {
-                const startIndex = dates.indexOf(range.start);
-                const endIndex = dates.indexOf(range.end);
+                // Find indices matching the date range.
+                // Using findIndex and iteration to be robust against downsampled chart dates.
+                let startIndex = dates.findIndex(d => d >= range.start);
+                // If range starts before the first data point, clamp to 0
+                if (startIndex === -1 && range.start < dates[0]) startIndex = 0;
                 
-                if (startIndex !== -1 && endIndex !== -1) {
+                let endIndex = -1;
+                // Find last date <= range.end
+                for (let i = dates.length - 1; i >= 0; i--) {
+                    if (dates[i] <= range.end) {
+                        endIndex = i;
+                        break;
+                    }
+                }
+                // If range ends after the last data point, clamp to end
+                if (endIndex === -1 && range.end > dates[dates.length - 1]) endIndex = dates.length - 1;
+
+                if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
                     const startPixel = x.getPixelForValue(startIndex);
                     const endPixel = x.getPixelForValue(endIndex);
                     
-                    if (!isNaN(startPixel) && !isNaN(endPixel)) {
-                        ctx.fillStyle = 'rgba(234, 179, 8, 0.15)'; // Yellow tint
-                        ctx.fillRect(startPixel, top, endPixel - startPixel, bottom - top);
+                    // Constrain to chart area
+                    const drawStart = Math.max(left, startPixel);
+                    const drawEnd = Math.min(right, endPixel);
+                    const drawWidth = drawEnd - drawStart;
+                    
+                    if (drawWidth > 0) {
+                        // Yellow Box Background
+                        ctx.fillStyle = 'rgba(234, 179, 8, 0.15)'; 
+                        ctx.fillRect(drawStart, top, drawWidth, bottom - top);
                         
-                        // Add label
+                        // Yellow Border
+                        ctx.strokeStyle = 'rgba(234, 179, 8, 0.6)';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(drawStart, top, drawWidth, bottom - top);
+                        
+                        // Label
                         ctx.fillStyle = '#eab308';
-                        ctx.font = 'bold 10px Arial';
-                        ctx.fillText(`Stress Test ${idx + 1}`, startPixel + 5, top + 15 + (idx * 12));
+                        ctx.font = 'bold 12px Arial';
+                        // Adjust Y position for multiple ranges
+                        ctx.fillText(`Stress Test ${idx + 1}`, drawStart + 5, top + 15 + (idx * 15));
                     }
                 }
             });
@@ -799,21 +826,28 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, settings, stock
     const [mixRatio, setMixRatio] = useState<number>(0.5); // 0.5 = 50% Best AI, 50% Range Winner
     const [showMixerTool, setShowMixerTool] = useState<boolean>(false); // Control overall visibility of Mixer UI
 
+    // Reset dates when stock data changes, do not auto-fill to avoid "Stress Test Box" appearing by default
     useEffect(() => {
+        setPeriodStart('');
+        setPeriodEnd('');
+        setPeriodStart2('');
+        setPeriodEnd2('');
+        setRangeOptimizedPoint(null);
+    }, [stockData]);
+
+    const fillLastYearDates = () => {
         if (stockData && stockData.dates.length > 0) {
             const lastDate = stockData.dates[stockData.dates.length - 1];
             const oneYearAgoIndex = Math.max(0, stockData.dates.length - 252);
             const oneYearAgo = stockData.dates[oneYearAgoIndex];
-            setPeriodEnd(lastDate);
             setPeriodStart(oneYearAgo);
-            setPeriodEnd2(lastDate);
-            setPeriodStart2(oneYearAgo);
+            setPeriodEnd(lastDate);
         }
-    }, [stockData]);
+    };
 
     const toggleComparison = (ticker: string) => {
         setComparisonTickers(prev => {
-            const next = new Set(prev);
+            const next = new Set<string>(prev); // Explicit generic type for Set
             if (next.has(ticker)) next.delete(ticker);
             else next.add(ticker);
             return next;
@@ -994,20 +1028,20 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, settings, stock
         const rangeWeights = rangeOptimizedPoint.weights;
         const aiValues = currentData.portfolioValues || [];
         // We need Range Winner performance calculated on full range
-        const rangeValues = (rangeOptimizedPoint as any).portfolioValues || [];
+        const rangeValues = rangeOptimizedPoint.portfolioValues || [];
 
         const aiRatio = mixRatio;
         const rangeRatio = 1 - mixRatio;
 
         const mixedWeights: Record<string, number> = {};
-        const allTickers = new Set([...Object.keys(aiWeights), ...Object.keys(rangeWeights)]);
+        const allTickers = new Set<string>([...Object.keys(aiWeights), ...Object.keys(rangeWeights)]);
         allTickers.forEach(t => {
             mixedWeights[t] = (aiWeights[t] || 0) * aiRatio + (rangeWeights[t] || 0) * rangeRatio;
         });
 
         const mixedValues = aiValues.map((v, i) => {
             const rv = rangeValues[i];
-            if (v === null || rv === null) return null;
+            if (v === null || rv === null || rv === undefined) return null;
             return v * aiRatio + rv * rangeRatio;
         });
 
@@ -1123,7 +1157,8 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, settings, stock
             performanceChartInstance.current = new Chart(performanceChartRef.current, {
                 type: 'line',
                 data: { labels: chartDates, datasets },
-                plugins: [cashPeriodsPlugin(currentData.cashPeriods, rangeOptimizedPoint ? highlightRanges : undefined, chartDates)],
+                // Use updated highlightRanges immediately without condition to show box during selection
+                plugins: [cashPeriodsPlugin(currentData.cashPeriods, highlightRanges, chartDates)],
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
@@ -1220,12 +1255,19 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, settings, stock
                     responsive: true, maintainAspectRatio: false,
                     onClick: (event, elements, chart) => {
                         if (elements.length > 0) {
-                            const element = elements[0] as ActiveElement;
+                            const element = elements[0] as InteractionItem;
                             const index = element.index;
                             const dsIndex = element.datasetIndex;
                             const dataset = chart.data.datasets[dsIndex];
-                            if (dataset && dataset.label === '模擬組合') setSelectedPoint(scatterData[index]);
-                            else if (dataset && dataset.label?.includes('最佳') && !importedPortfolio) setSelectedPoint(null);
+                            if (dataset && dataset.label === '模擬組合') {
+                                setSelectedPoint(scatterData[index]);
+                            } else if (dataset && (dataset.label?.includes('最佳') || dataset.label?.includes('導入組合'))) {
+                                setSelectedPoint(null);
+                            } else if (dataset && dataset.label?.includes('區間王者') && rangeOptimizedPoint) {
+                                setSelectedPoint(rangeOptimizedPoint);
+                            } else if (dataset && dataset.label?.includes('原始持倉') && result.userPortfolioResult) {
+                                setSelectedPoint(result.userPortfolioResult);
+                            }
                         }
                     },
                     plugins: {
@@ -1413,6 +1455,13 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, settings, stock
                                         value={periodEnd}
                                         onChange={(e) => setPeriodEnd(e.target.value)}
                                     />
+                                    <button 
+                                        onClick={fillLastYearDates}
+                                        className="ml-1 text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded border border-gray-600 transition-colors"
+                                        title="自動帶入最近一年"
+                                    >
+                                        1Y
+                                    </button>
                                 </div>
                                 {showSecondPeriod && (
                                     <div className="flex items-center gap-2 animate-fade-in">
@@ -1523,80 +1572,112 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, settings, stock
                                              <button onClick={() => setMixRatio(0)} className="text-[10px] text-gray-500 hover:text-fuchsia-400">100% Range</button>
                                          </div>
                                      </div>
-                                     <button onClick={handleExportMixedCSV} className="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded transition-all flex items-center justify-center gap-2">
-                                         <i className="fas fa-file-export"></i> 導出混合組合 CSV
+                                     <button 
+                                        onClick={handleExportMixedCSV}
+                                        className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded transition-colors text-sm flex items-center justify-center gap-2"
+                                     >
+                                         <i className="fas fa-file-export"></i> 匯出混合組合
                                      </button>
                                  </div>
-
-                                 {/* Mixed Composition Preview */}
-                                 <div className="lg:col-span-2 space-y-2">
-                                    <div className="text-xs text-teal-400 font-bold flex items-center gap-1 mb-2">
-                                        <i className="fas fa-list-ul"></i> 混合組合持倉預覽:
-                                    </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                                        {mixedPortfolioResult && (Object.entries(mixedPortfolioResult.weights) as [string, number][])
+                                 
+                                 {/* Mixed Weights Preview */}
+                                 <div className="lg:col-span-2 bg-gray-900/50 p-4 rounded-lg border border-gray-700 max-h-60 overflow-y-auto custom-scrollbar">
+                                     <h4 className="text-sm font-bold text-gray-300 mb-3 border-b border-gray-700 pb-1">混合後權重預覽</h4>
+                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                         {mixedPortfolioResult && (Object.entries(mixedPortfolioResult.weights) as [string, number][])
                                             .sort(([, a], [, b]) => b - a)
-                                            .filter(([, w]) => w > 0.005)
-                                            .slice(0, 30) // Limit display in mixer
+                                            .filter(([, w]) => w > 0.001)
                                             .map(([ticker, weight]) => (
-                                            <div key={ticker} className="bg-gray-900/80 p-2 rounded border border-gray-700 flex flex-col group hover:border-teal-500/50 transition-all">
-                                                <span className="text-xs font-bold text-gray-200">{ticker}</span>
-                                                <span className="text-sm font-mono text-teal-400">{(weight * 100).toFixed(2)}%</span>
-                                                <div className="w-full bg-gray-800 h-1 mt-1 rounded-full overflow-hidden">
-                                                    <div className="bg-teal-500 h-full" style={{ width: `${weight * 100}%` }}></div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                             <div key={ticker} className="flex justify-between items-center text-xs bg-gray-800 p-2 rounded">
+                                                 <span className="font-bold text-gray-400">{ticker}</span>
+                                                 <span className="text-amber-400 font-mono">{(weight * 100).toFixed(2)}%</span>
+                                             </div>
+                                         ))}
+                                     </div>
                                  </div>
                             </div>
                         )}
                     </div>
                  </div>
              )}
+             
+             {/* Charts */}
+             <div className="space-y-6">
+                <CollapsibleSection title="歷史走勢比較 (History Trend)" icon="fa-chart-line" defaultOpen={true}>
+                     <div className="flex flex-col gap-2 mb-2">
+                         <div className="flex justify-between items-center flex-wrap gap-2">
+                             {/* Ticker Toggles */}
+                             <div className="flex flex-wrap gap-2 items-center">
+                                <span className="text-xs text-gray-500 flex items-center"><i className="fas fa-layer-group mr-1"></i> 疊加個股 (Top 10):</span>
+                                {activeTickers.slice(0, 10).map(t => (
+                                    <button
+                                        key={t}
+                                        onClick={() => toggleComparison(t)}
+                                        className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${
+                                            comparisonTickers.has(t) 
+                                            ? 'bg-gray-800 font-bold' 
+                                            : 'bg-transparent text-gray-600 border-gray-800 hover:border-gray-600'
+                                        }`}
+                                        style={{ 
+                                            borderColor: comparisonTickers.has(t) ? tickerColorMap[t] : undefined,
+                                            color: comparisonTickers.has(t) ? tickerColorMap[t] : undefined
+                                        }}
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                             </div>
 
-             <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
-                 <SectionHeader title="歷史走勢比較" icon="fa-chart-line" rightElement={
-                     <div className="flex gap-2">
-                         <div className="flex items-center gap-1 mr-4">
-                             <input type="checkbox" id="logScale" checked={isLogScale} onChange={() => setIsLogScale(!isLogScale)} className="rounded bg-gray-700 border-gray-600 text-teal-500 focus:ring-teal-500" />
-                             <label htmlFor="logScale" className="text-xs text-gray-400 cursor-pointer">對數座標 (Log)</label>
+                             <button 
+                                 onClick={() => setIsLogScale(!isLogScale)}
+                                 className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded transition-colors whitespace-nowrap"
+                             >
+                                 {isLogScale ? '切換線性座標' : '切換對數座標'}
+                             </button>
                          </div>
-                         <button onClick={() => setIsLogScale(!isLogScale)} className="px-3 py-1 text-xs border border-gray-600 rounded text-gray-400 hover:text-white">切換對數</button>
                      </div>
-                 } />
-                 
-                 <div className="flex flex-wrap gap-2 text-xs mb-4">
-                    <span className="text-gray-400 mr-2 flex items-center"><i className="fas fa-layer-group mr-1"></i>疊加個股 (Top {activeTickers.length}):</span>
-                    {activeTickers.map((t) => (
-                        <button key={t} onClick={() => toggleComparison(t)} style={{ borderColor: comparisonTickers.has(t) ? tickerColorMap[t as string] : 'rgb(55, 65, 81)', color: comparisonTickers.has(t) ? tickerColorMap[t as string] : 'rgb(107, 114, 128)', backgroundColor: comparisonTickers.has(t) ? 'rgba(55, 65, 81, 0.3)' : 'transparent' }} className="px-2 py-1 rounded border transition-colors hover:border-gray-500">
-                            {t}
-                        </button>
-                    ))}
-                    {activeTickers.length === 0 && <span className="text-gray-600 italic">無持倉</span>}
-                 </div>
+                     <div className="h-96 w-full relative">
+                         <canvas ref={performanceChartRef}></canvas>
+                     </div>
+                </CollapsibleSection>
 
-                 <div className="h-80 w-full relative"><canvas ref={performanceChartRef}></canvas></div>
-                 <div className="mt-2 h-24 w-full relative"><canvas ref={drawdownChartRef}></canvas></div>
+                <CollapsibleSection title="回撤分析 (Drawdown)" icon="fa-water" colorClass="text-red-400" defaultOpen={true}>
+                     <div className="h-64 w-full relative">
+                         <canvas ref={drawdownChartRef}></canvas>
+                     </div>
+                </CollapsibleSection>
              </div>
 
-             <CollapsibleSection title="最佳 AI 配置 月度回報" icon="fa-calendar-alt" colorClass="text-white" defaultOpen={true}>
+             <CollapsibleSection title="月度回報熱力圖 (Monthly Returns)" icon="fa-calendar-alt" defaultOpen={true}>
                  <MonthlyReturnsChart returns={currentData.monthlyReturns} metrics={currentData.metrics} />
              </CollapsibleSection>
 
-             <CollapsibleSection title="資產輪動分析 (Asset Rotation)" icon="fa-sync-alt" colorClass="text-yellow-400">
-                  <p className="text-xs text-gray-500 mb-4">顯示資產相對於投資組合的強弱勢循環 (Top 20)。每個點代表資產當前的狀態，尾巴顯示過去 20 個週期的移動軌跡。</p>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      <div className="p-2">
-                          <AssetRotationChart weights={currentData.weights} stockData={stockData} portfolioValues={currentData.portfolioValues || []} downsampleStep={5} colorMap={tickerColorMap} />
-                      </div>
-                      <div className="p-2">
-                          <MarketCycleClock weights={currentData.weights} stockData={stockData} portfolioValues={currentData.portfolioValues || []} colorMap={tickerColorMap} />
-                      </div>
-                  </div>
+             <CollapsibleSection title="資產輪動週期 (RRG Analysis)" icon="fa-sync-alt" colorClass="text-purple-400" defaultOpen={false}>
+                 <div className="space-y-6">
+                    <p className="text-sm text-gray-400 bg-gray-900/30 p-3 rounded border border-gray-700">
+                        <strong>相對旋轉圖 (RRG):</strong> 展示資產相對於投資組合整體的相對強弱 (X軸) 與動能 (Y軸)。
+                        順時針方向移動：領先 (Leading) → 轉弱 (Weakening) → 落後 (Lagging) → 改善 (Improving)。
+                    </p>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-gray-900/50 p-2 rounded-lg border border-gray-700">
+                             <h4 className="text-center text-gray-300 text-sm font-bold mb-2">完整軌跡 (History Trail)</h4>
+                             <AssetRotationChart weights={currentData.weights} stockData={stockData} portfolioValues={currentData.portfolioValues || []} downsampleStep={5} colorMap={tickerColorMap} />
+                        </div>
+                        <div className="bg-gray-900/50 p-2 rounded-lg border border-gray-700 flex items-center justify-center">
+                             <div className="w-full">
+                                <h4 className="text-center text-gray-300 text-sm font-bold mb-2">當前週期時鐘 (Current Cycle)</h4>
+                                <MarketCycleClock weights={currentData.weights} stockData={stockData} portfolioValues={currentData.portfolioValues || []} colorMap={tickerColorMap} />
+                             </div>
+                        </div>
+                    </div>
+                 </div>
              </CollapsibleSection>
 
-             {stockData && activeTickers.length > 0 && <RealTimePriceChecker weights={currentData.weights} />}
+             <RealTimePriceChecker weights={currentData.weights} />
+
+             <div className="text-center text-xs text-gray-500 pt-8 pb-4">
+                 AI Portfolio Optimizer v3.4 | Powered by Genetic Algorithms & Web Workers
+             </div>
         </div>
     );
 };

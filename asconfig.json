@@ -1,22 +1,26 @@
 {
   "targets": {
     "debug": {
-      "outFile": "build/debug.wasm",
-      "textFile": "build/debug.wat",
+      "outFile": "public/algorithms.wasm",
+      "textFile": "build/algorithms.wat",
       "sourceMap": true,
       "debug": true
     },
     "release": {
-      "outFile": "build/release.wasm",
-      "textFile": "build/release.wat",
-      "sourceMap": true,
+      "outFile": "public/algorithms.wasm",
+      "textFile": "build/algorithms.wat",
+      "sourceMap": false,
       "optimizeLevel": 3,
-      "shrinkLevel": 0,
+      "shrinkLevel": 2,
       "converge": false,
-      "noAssert": false
+      "noAssert": true
     }
   },
   "options": {
-    "bindings": "esm"
+    "bindings": "raw",
+    "exportRuntime": false,
+    "runtime": "stub",
+    "initialMemory": 64,
+    "maximumMemory": 256
   }
 }

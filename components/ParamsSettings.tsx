@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { PortfolioParams, OptimizationSettings, PriorityStockConfig, HedgeConfig } from '../types';
+import { initializeWasm, isWasmAvailable, setAlgorithmImplementation, type AlgorithmImplementation } from '../services/wasm';
 
 interface ParamsSettingsProps {
   initialParams: PortfolioParams;
@@ -54,6 +55,20 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = ({ initialParams, stockTic
   });
 
   const [userHoldings, setUserHoldings] = useState<UserHolding[]>([]);
+
+  // WASM 狀態 - 純 WASM 版本，自動啟用
+  const [wasmStatus, setWasmStatus] = useState<'loading' | 'available' | 'unavailable'>('loading');
+
+  // 初始化 WASM - 純 WASM 模式，自動設置為 WASM
+  useEffect(() => {
+    initializeWasm('/algorithms.wasm').then((success) => {
+      setWasmStatus(success ? 'available' : 'unavailable');
+      if (success) {
+        console.log('🔒 Pure WASM mode - algorithms protected');
+        setAlgorithmImplementation('all', 'wasm');
+      }
+    });
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSettingsChange = (field: keyof typeof settings, value: string | number | boolean) => {
@@ -244,8 +259,9 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = ({ initialParams, stockTic
               <select value={settings.optimizeTarget} onChange={e => handleSettingsChange('optimizeTarget', e.target.value)} className={inputStyles}>
                 <option value="super_ai">🤖 超級AI優化 (終極多維度)</option>
                 <option value="super_ai_v2">🤖 超級AI優化 v2.0 (六邊形戰士)</option>
-                <option value="ultra_smooth">💎 極致穩定 v2 (雙向波動通道)</option>
                 <option value="ultra_smooth_v1">💎 極致穩定 v1 (類定存效果)</option>
+                <option value="ultra_smooth">💎 極致穩定 v2 (雙向波動通道)</option>
+                <option value="ultra_smooth_v3">💎 極致穩定 v3 (低位佈局)</option>
                 <option value="sharpe">最大化 Sharpe Ratio</option>
                 <option value="cagr">最大化 CAGR</option>
                 <option value="calmar">最大化 CAGR/MaxDD</option>
@@ -268,6 +284,12 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = ({ initialParams, stockTic
                       已啟用雙向波動控制：單日漲跌超過 8% 的組合將直接被淘汰。
                   </div>
               )}
+              {settings.optimizeTarget === 'ultra_smooth_v3' && (
+                  <div className="mt-2 text-xs text-green-400 bg-green-900/30 p-2 rounded border border-green-700/50">
+                      <i className="fas fa-check-circle mr-1"></i>
+                      <strong>V3 (低位佈局):</strong> 基於 V2 通道，但嚴重懲罰目前價格處於通道上方的組合。專門尋找「走勢穩、且目前剛好回落到通道底部」的買入良機。
+                  </div>
+              )}
                {settings.optimizeTarget === 'ultra_smooth_v1' && (
                   <div className="mt-2 text-xs text-blue-400 bg-blue-900/30 p-2 rounded border border-blue-700/50">
                       <i className="fas fa-info-circle mr-1"></i>
@@ -279,6 +301,40 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = ({ initialParams, stockTic
                <input type="number" value={settings.targetCAGR} onChange={e => handleSettingsChange('targetCAGR', parseFloat(e.target.value))} className={`${inputStyles} ${!isTargetReturnMode && 'opacity-50'}`} disabled={!isTargetReturnMode} />
             </ParamCard>
         </div>
+
+        {/* WASM 算法加速選項 - 純 WASM 版本 */}
+        {(settings.optimizeTarget === 'super_ai' || settings.optimizeTarget === 'super_ai_v2' || settings.optimizeTarget === 'ultra_smooth' || settings.optimizeTarget === 'ultra_smooth_v1' || settings.optimizeTarget === 'ultra_smooth_v3') && (
+          <div className="mt-4 p-4 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 rounded-lg border border-purple-500/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🔒</span>
+                <div>
+                  <h3 className="text-sm font-bold text-purple-300">WebAssembly 保護模式</h3>
+                  <p className="text-xs text-gray-400">
+                    核心算法已編譯為 WASM - 程式碼受保護
+                    {wasmStatus === 'loading' && ' (載入中...)'}
+                    {wasmStatus === 'unavailable' && ' (載入失敗)'}
+                    {wasmStatus === 'available' && ' ✅ 已就緒'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-purple-300 font-bold">WASM</span>
+                <div className="w-3 h-3 rounded-full bg-purple-500 animate-pulse"></div>
+              </div>
+            </div>
+            {wasmStatus === 'available' && (
+              <div className="mt-2 text-xs text-purple-300 bg-purple-900/40 p-2 rounded">
+                🔒 純 WASM 模式運行中 - 所有核心算法已編譯為 WebAssembly 二進位檔，無法被逆向工程。
+              </div>
+            )}
+            {wasmStatus === 'unavailable' && (
+              <div className="mt-2 text-xs text-red-300 bg-red-900/40 p-2 rounded">
+                ⚠️ WASM 載入失敗 - 請確保 algorithms.wasm 文件存在於正確位置。
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* User Portfolio Section Kept Same */}

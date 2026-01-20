@@ -57,28 +57,6 @@ const App: React.FC = () => {
       addToast('請先載入股票數據', 'error');
       return;
     }
-
-    // --- STEP 6: 安全係數獲取邏輯 ---
-    let securityFactor = 1.0;
-    try {
-        // 嘗試從 Netlify Function 獲取係數
-        // 開發環境下，vite.config.ts 的 proxy 會將此請求導向正確位置
-        const response = await fetch('/.netlify/functions/get_security_factor');
-        if (response.ok) {
-            const data = await response.json();
-            if (data.factor) {
-                securityFactor = data.factor;
-                console.log("Security Factor Loaded:", securityFactor);
-            }
-        } else {
-            console.warn("Security Factor fetch failed, using default.");
-        }
-    } catch (e) {
-        console.warn("Security check bypassed (offline/dev mode)", e);
-        // 在本地開發如果沒有啟動 Netlify Dev，這裡會失敗，我們預設使用 1.0 讓程式繼續運行
-        securityFactor = 1.0; 
-    }
-    // ---------------------------------
     
     setIsRunning(true);
     shouldStopRef.current = false;
@@ -108,8 +86,7 @@ const App: React.FC = () => {
     workersRef.current.forEach((worker, index) => {
         worker.postMessage({
             stockData,
-            // 將獲取到的 securityFactor 注入到 settings 中傳給 Worker
-            settings: { ...settings, securityFactor },
+            settings,
             simulations: simsPerWorker,
             workerId: index
         });
