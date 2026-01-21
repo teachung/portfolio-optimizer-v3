@@ -1,14 +1,21 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { User, onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './src/firebase';
 import { Tab, StockData, PortfolioParams, OptimizationSettings, OptimizationResult, ProgressUpdate, PriorityStockConfig, ScatterPoint } from './types';
 import DataInput from './components/DataInput';
 import ParamsSettings from './components/ParamsSettings';
 import RunOptimization from './components/RunOptimization';
 import ResultsDisplay from './components/ResultsDisplay';
 import Toast from './components/Toast';
+import LoginPage from './components/LoginPage';
 import { createWorkerCode } from './services/workerHelper';
 
 const App: React.FC = () => {
+  // 認證狀態
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [activeTab, setActiveTab] = useState<Tab>(Tab.Data);
   const [stockData, setStockData] = useState<StockData | null>(null);
   const [params, setParams] = useState<PortfolioParams | null>(null);
@@ -33,6 +40,57 @@ const App: React.FC = () => {
       setToasts(prev => prev.filter(toast => toast.id !== id));
     }, 5000);
   }, []);
+
+  // 監聽認證狀態變化
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.email) {
+        // 用戶已登入，驗證 Airtable 審批狀態
+        try {
+          const response = await fetch(`/api/check-user-status?email=${encodeURIComponent(firebaseUser.email)}`);
+          const data = await response.json();
+
+          if (data.approved) {
+            setUser(firebaseUser);
+          } else {
+            // 未審批，登出
+            await signOut(auth);
+            setUser(null);
+          }
+        } catch (error) {
+          console.error('Auth check error:', error);
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 登入成功回調
+  const handleLoginSuccess = (loggedInUser: User) => {
+    setUser(loggedInUser);
+    addToast(`歡迎回來，${loggedInUser.displayName || loggedInUser.email}！`, 'success');
+  };
+
+  // 登出
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+      setStockData(null);
+      setParams(null);
+      setResults(null);
+      setActiveTab(Tab.Data);
+      addToast('已成功登出', 'info');
+    } catch (error) {
+      console.error('Logout error:', error);
+      addToast('登出失敗', 'error');
+    }
+  };
 
   const handleDataParsed = (data: { stockData: StockData; params: PortfolioParams }) => {
     setStockData(data.stockData);
@@ -184,10 +242,43 @@ const App: React.FC = () => {
       </button>
   );
 
+  // 加載中
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">載入中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 未登入 - 顯示登入頁面
+  if (!user) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // 已登入 - 顯示主應用
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8 bg-gray-900 text-gray-200 font-sans">
       <div className="max-w-7xl mx-auto bg-gray-800/50 rounded-2xl shadow-2xl shadow-black/30 overflow-hidden border border-gray-700">
-        <header className="p-6 text-center bg-gray-900/70 border-b-2 border-teal-500/50">
+        <header className="p-6 bg-gray-900/70 border-b-2 border-teal-500/50">
+          {/* 用戶信息欄 */}
+          <div className="flex justify-end items-center mb-4">
+            <div className="flex items-center gap-3">
+              {user.photoURL && (
+                <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full border-2 border-teal-500" />
+              )}
+              <span className="text-sm text-gray-300">{user.displayName || user.email}</span>
+              <button
+                onClick={handleLogout}
+                className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 px-3 py-1 rounded-lg transition-colors"
+              >
+                登出
+              </button>
+            </div>
+          </div>
           <h1 className="text-3xl md:text-4xl font-bold text-white flex items-center justify-center gap-3">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" className="w-12 h-12" role="img" aria-label="Network Connection Logo">
               <g>
