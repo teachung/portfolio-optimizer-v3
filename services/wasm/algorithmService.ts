@@ -1,6 +1,33 @@
 // Algorithm Service - Pure WASM Version
 // All algorithms run exclusively through WebAssembly - no TypeScript fallback
 // This provides maximum code protection
+// Domain-locked: Only runs on authorized domains
+
+// ============================================
+// DOMAIN PROTECTION
+// ============================================
+const ALLOWED_DOMAINS = [
+  'portfolioblender.vercel.app',
+  'localhost',
+  '127.0.0.1',
+];
+
+function checkDomainAuthorization(): boolean {
+  if (typeof window === 'undefined') return true; // SSR/Node.js
+
+  const hostname = window.location.hostname;
+  return ALLOWED_DOMAINS.some(domain =>
+    hostname === domain || hostname.endsWith('.' + domain)
+  );
+}
+
+function requireAuthorizedDomain(): void {
+  if (!checkDomainAuthorization()) {
+    const msg = '🚫 Unauthorized domain. This algorithm is licensed for portfolioblender.vercel.app only.';
+    console.error(msg);
+    throw new Error(msg);
+  }
+}
 
 import {
   loadWasm,
@@ -125,8 +152,10 @@ export interface SuperAIv2Config {
 /**
  * Calculate Super AI v1 score (終極多維度)
  * PURE WASM - no TypeScript fallback
+ * DOMAIN PROTECTED
  */
 export function calculateSuperAI(portfolioValues: number[]): SuperAIv1Result {
+  requireAuthorizedDomain();
   if (!wasmInitialized) {
     throw new Error('WASM not initialized. Call initializeWasm() first.');
   }
@@ -136,11 +165,13 @@ export function calculateSuperAI(portfolioValues: number[]): SuperAIv1Result {
 /**
  * Calculate Super AI v2.0 score (六邊形戰士)
  * PURE WASM - no TypeScript fallback
+ * DOMAIN PROTECTED
  */
 export function calculateSuperAI_v2(
   input: SuperAIv2Input,
   cfg: SuperAIv2Config = {}
 ): SuperAIv2Result {
+  requireAuthorizedDomain();
   if (!wasmInitialized) {
     throw new Error('WASM not initialized. Call initializeWasm() first.');
   }
@@ -154,8 +185,10 @@ export function calculateSuperAI_v2(
 /**
  * Calculate Ultra Smooth v1 score (類定存效果)
  * PURE WASM - no TypeScript fallback
+ * DOMAIN PROTECTED
  */
 export function calculateUltraSmooth_v1(portfolioValues: number[]): UltraSmoothV1Result {
+  requireAuthorizedDomain();
   if (!wasmInitialized) {
     throw new Error('WASM not initialized. Call initializeWasm() first.');
   }
@@ -165,11 +198,13 @@ export function calculateUltraSmooth_v1(portfolioValues: number[]): UltraSmoothV
 /**
  * Calculate Ultra Smooth v2 score (雙向波動通道)
  * PURE WASM - no TypeScript fallback
+ * DOMAIN PROTECTED
  */
 export function calculateUltraSmooth_v2(
   portfolioValues: number[],
   maxSpikeThreshold: number = 0.08
 ): UltraSmoothV2Result {
+  requireAuthorizedDomain();
   if (!wasmInitialized) {
     throw new Error('WASM not initialized. Call initializeWasm() first.');
   }
@@ -179,11 +214,13 @@ export function calculateUltraSmooth_v2(
 /**
  * Calculate Ultra Smooth v3 score (低位佈局)
  * PURE WASM - no TypeScript fallback
+ * DOMAIN PROTECTED
  */
 export function calculateUltraSmooth_v3(
   portfolioValues: number[],
   maxSpikeThreshold: number = 0.08
 ): UltraSmoothV3Result {
+  requireAuthorizedDomain();
   if (!wasmInitialized) {
     throw new Error('WASM not initialized. Call initializeWasm() first.');
   }
@@ -215,9 +252,27 @@ export async function getWasmBinaryForWorker(wasmPath: string = '/algorithms.was
 export function generateWorkerWasmCode(): string {
   return `
     // WASM Integration for Worker - Pure WASM Mode
+    // Domain-locked for security
     let wasmInstance = null;
 
+    const ALLOWED_DOMAINS = ['portfolioblender.vercel.app', 'localhost', '127.0.0.1'];
+
+    function checkWorkerDomain() {
+      try {
+        const url = self.location.href;
+        const hostname = new URL(url).hostname;
+        const isAllowed = ALLOWED_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d));
+        if (!isAllowed) {
+          throw new Error('🚫 Unauthorized domain');
+        }
+      } catch (e) {
+        if (e.message.includes('Unauthorized')) throw e;
+        // If location check fails, allow (may be blob URL)
+      }
+    }
+
     function initWasmInWorker(wasmBuffer) {
+      checkWorkerDomain();
       if (!wasmBuffer || wasmInstance) return;
       try {
         const wasmModule = new WebAssembly.Module(wasmBuffer);

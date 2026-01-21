@@ -261,7 +261,8 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = ({ initialParams, stockTic
                 <option value="super_ai_v2">🤖 超級AI優化 v2.0 (六邊形戰士)</option>
                 <option value="ultra_smooth_v1">💎 極致穩定 v1 (類定存效果)</option>
                 <option value="ultra_smooth">💎 極致穩定 v2 (雙向波動通道)</option>
-                <option value="ultra_smooth_v3">💎 極致穩定 v3 (低位佈局)</option>
+                {/* v3 暫時隱藏 - 測試中 */}
+                {/* <option value="ultra_smooth_v3">💎 極致穩定 v3 (低位佈局)</option> */}
                 <option value="sharpe">最大化 Sharpe Ratio</option>
                 <option value="cagr">最大化 CAGR</option>
                 <option value="calmar">最大化 CAGR/MaxDD</option>
@@ -303,7 +304,7 @@ const ParamsSettings: React.FC<ParamsSettingsProps> = ({ initialParams, stockTic
         </div>
 
         {/* WASM 算法加速選項 - 純 WASM 版本 */}
-        {(settings.optimizeTarget === 'super_ai' || settings.optimizeTarget === 'super_ai_v2' || settings.optimizeTarget === 'ultra_smooth' || settings.optimizeTarget === 'ultra_smooth_v1' || settings.optimizeTarget === 'ultra_smooth_v3') && (
+        {(settings.optimizeTarget === 'super_ai' || settings.optimizeTarget === 'super_ai_v2' || settings.optimizeTarget === 'ultra_smooth' || settings.optimizeTarget === 'ultra_smooth_v1') && (
           <div className="mt-4 p-4 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 rounded-lg border border-purple-500/50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
