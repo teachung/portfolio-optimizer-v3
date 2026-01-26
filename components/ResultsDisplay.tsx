@@ -132,17 +132,172 @@ interface PriceInfo {
     time: string;
     currency: string;
     error?: boolean;
+    source?: string;
 }
+
+// ============================================
+// 多數據源報價系統
+// 優先順序: Yahoo Finance → Finnhub → Alpha Vantage → 最終失敗
+// ============================================
+
+// 數據源 1: Yahoo Finance (主要)
+const fetchFromYahoo = async (ticker: string): Promise<PriceInfo | null> => {
+    try {
+        const symbol = ticker.toUpperCase().replace(/\./g, '-');
+        const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
+        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error("Yahoo API error");
+
+        const data = await res.json();
+        const meta = data.chart?.result?.[0]?.meta;
+
+        if (meta && meta.regularMarketPrice) {
+            return {
+                price: meta.regularMarketPrice,
+                change: meta.regularMarketPrice - meta.chartPreviousClose,
+                changePercent: (meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose * 100,
+                time: new Date(meta.regularMarketTime * 1000).toLocaleTimeString(),
+                currency: meta.currency || 'USD',
+                source: 'Yahoo'
+            };
+        }
+        return null;
+    } catch (e) {
+        console.warn(`Yahoo failed for ${ticker}:`, e);
+        return null;
+    }
+};
+
+// 數據源 2: Finnhub (免費 API，需要註冊但有免費配額)
+const fetchFromFinnhub = async (ticker: string): Promise<PriceInfo | null> => {
+    try {
+        const symbol = ticker.toUpperCase();
+        // 使用免費的 demo token，實際使用建議註冊獲取自己的 key
+        const targetUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=demo`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
+        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error("Finnhub API error");
+
+        const data = await res.json();
+
+        if (data && data.c && data.c > 0) {
+            return {
+                price: data.c, // current price
+                change: data.d || 0, // change
+                changePercent: data.dp || 0, // change percent
+                time: new Date().toLocaleTimeString(),
+                currency: 'USD',
+                source: 'Finnhub'
+            };
+        }
+        return null;
+    } catch (e) {
+        console.warn(`Finnhub failed for ${ticker}:`, e);
+        return null;
+    }
+};
+
+// 數據源 3: Twelve Data (免費 API)
+const fetchFromTwelveData = async (ticker: string): Promise<PriceInfo | null> => {
+    try {
+        const symbol = ticker.toUpperCase();
+        const targetUrl = `https://api.twelvedata.com/price?symbol=${symbol}&apikey=demo`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
+        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error("TwelveData API error");
+
+        const data = await res.json();
+
+        if (data && data.price && parseFloat(data.price) > 0) {
+            return {
+                price: parseFloat(data.price),
+                change: 0,
+                changePercent: 0,
+                time: new Date().toLocaleTimeString(),
+                currency: 'USD',
+                source: 'TwelveData'
+            };
+        }
+        return null;
+    } catch (e) {
+        console.warn(`TwelveData failed for ${ticker}:`, e);
+        return null;
+    }
+};
+
+// 數據源 4: Marketstack (免費 API)
+const fetchFromMarketstack = async (ticker: string): Promise<PriceInfo | null> => {
+    try {
+        const symbol = ticker.toUpperCase();
+        // 使用 demo 模式
+        const targetUrl = `http://api.marketstack.com/v1/eod/latest?symbols=${symbol}&access_key=demo`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
+        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error("Marketstack API error");
+
+        const data = await res.json();
+
+        if (data && data.data && data.data[0] && data.data[0].close) {
+            const stock = data.data[0];
+            return {
+                price: stock.close,
+                change: stock.close - stock.open,
+                changePercent: ((stock.close - stock.open) / stock.open) * 100,
+                time: new Date().toLocaleTimeString(),
+                currency: 'USD',
+                source: 'Marketstack'
+            };
+        }
+        return null;
+    } catch (e) {
+        console.warn(`Marketstack failed for ${ticker}:`, e);
+        return null;
+    }
+};
+
+// 主獲取函數 - 嘗試多個數據源
+const fetchPriceWithFallback = async (ticker: string): Promise<PriceInfo> => {
+    // 按優先順序嘗試各數據源
+    const sources = [
+        fetchFromYahoo,
+        fetchFromFinnhub,
+        fetchFromTwelveData,
+        fetchFromMarketstack
+    ];
+
+    for (const fetchFn of sources) {
+        const result = await fetchFn(ticker);
+        if (result && result.price > 0) {
+            return result;
+        }
+    }
+
+    // 所有數據源都失敗
+    return {
+        price: 0,
+        change: 0,
+        changePercent: 0,
+        time: '-',
+        currency: '',
+        error: true,
+        source: 'None'
+    };
+};
 
 const RealTimePriceChecker: React.FC<{ weights: Record<string, number> }> = ({ weights }) => {
     // Limit to top 20 active tickers to prevent flooding API and blocking UI
-    const activeTickers = useMemo(() => 
+    const activeTickers = useMemo(() =>
         Object.keys(weights)
             .filter(t => weights[t] > 0.001)
             .sort((a,b) => weights[b] - weights[a])
             .slice(0, 20)
     , [weights]);
-    
+
     const [prices, setPrices] = useState<Record<string, PriceInfo | null>>({});
     const [loading, setLoading] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -153,39 +308,14 @@ const RealTimePriceChecker: React.FC<{ weights: Record<string, number> }> = ({ w
         setLoading(true);
         const newPrices: Record<string, PriceInfo | null> = {};
 
+        // 使用多數據源獲取報價
         const fetchOne = async (ticker: string) => {
-             try {
-                // Yahoo Finance symbol normalization (replace . with -)
-                const symbol = ticker.toUpperCase().replace(/\./g, '-');
-                const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`;
-                const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-                
-                const res = await fetch(proxyUrl);
-                if (!res.ok) throw new Error("Network");
-                
-                const data = await res.json();
-                const meta = data.chart?.result?.[0]?.meta;
-                
-                if (meta) {
-                    newPrices[ticker] = {
-                        price: meta.regularMarketPrice,
-                        change: meta.regularMarketPrice - meta.chartPreviousClose,
-                        changePercent: (meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose * 100,
-                        time: new Date(meta.regularMarketTime * 1000).toLocaleTimeString(),
-                        currency: meta.currency
-                    };
-                } else {
-                    newPrices[ticker] = { price: 0, change: 0, changePercent: 0, time: '-', currency: '', error: true };
-                }
-             } catch (e) {
-                 console.error(`Error fetching ${ticker}`, e);
-                 newPrices[ticker] = { price: 0, change: 0, changePercent: 0, time: '-', currency: '', error: true };
-             }
+            newPrices[ticker] = await fetchPriceWithFallback(ticker);
         };
 
         // Batch requests to avoid browser limit, though activeTickers is already capped
         await Promise.all(activeTickers.map(t => fetchOne(t)));
-        
+
         setPrices(newPrices);
         setLastUpdated(new Date().toLocaleTimeString());
         setLoading(false);
@@ -315,7 +445,10 @@ const RealTimePriceChecker: React.FC<{ weights: Record<string, number> }> = ({ w
                                         <i className="fas fa-circle-notch fa-spin text-green-500"></i>
                                     </div>
                                 ) : isError ? (
-                                    <div className="text-xs text-red-400 py-4 text-center">數據獲取失敗</div>
+                                    <div className="text-xs text-red-400 py-4 text-center">
+                                        <i className="fas fa-exclamation-triangle mr-1"></i>
+                                        所有數據源失敗
+                                    </div>
                                 ) : info ? (
                                     <div className="space-y-2">
                                         <div>
@@ -326,6 +459,11 @@ const RealTimePriceChecker: React.FC<{ weights: Record<string, number> }> = ({ w
                                                 <i className={`fas ${isUp ? 'fa-caret-up' : 'fa-caret-down'}`}></i>
                                                 {Math.abs(info.change).toFixed(2)} ({Math.abs(info.changePercent).toFixed(2)}%)
                                             </div>
+                                            {info.source && (
+                                                <div className="text-[9px] text-gray-500 mt-0.5">
+                                                    via {info.source}
+                                                </div>
+                                            )}
                                         </div>
                                         {calc && (
                                             <div className="pt-2 border-t border-gray-700/50">
