@@ -136,157 +136,59 @@ interface PriceInfo {
 }
 
 // ============================================
-// 多數據源報價系統
-// 優先順序: Yahoo Finance → Finnhub → Alpha Vantage → 最終失敗
+// 報價系統 - 使用 Vercel Serverless Function 代理
+// 解決 CORS 問題，從服務器端獲取報價
 // ============================================
 
-// 數據源 1: Yahoo Finance (主要)
-const fetchFromYahoo = async (ticker: string): Promise<PriceInfo | null> => {
+// 主獲取函數 - 使用我們的 API 代理
+const fetchPriceWithFallback = async (ticker: string): Promise<PriceInfo> => {
     try {
         const symbol = ticker.toUpperCase().replace(/\./g, '-');
-        const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1m&range=1d`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
 
-        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-        if (!res.ok) throw new Error("Yahoo API error");
+        // 使用我們的 Vercel Serverless Function
+        const res = await fetch(`/api/get-quote?symbol=${encodeURIComponent(symbol)}`, {
+            signal: AbortSignal.timeout(15000) // 15 秒超時
+        });
 
-        const data = await res.json();
-        const meta = data.chart?.result?.[0]?.meta;
-
-        if (meta && meta.regularMarketPrice) {
-            return {
-                price: meta.regularMarketPrice,
-                change: meta.regularMarketPrice - meta.chartPreviousClose,
-                changePercent: (meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose * 100,
-                time: new Date(meta.regularMarketTime * 1000).toLocaleTimeString(),
-                currency: meta.currency || 'USD',
-                source: 'Yahoo'
-            };
+        if (!res.ok) {
+            throw new Error(`API error: ${res.status}`);
         }
-        return null;
-    } catch (e) {
-        console.warn(`Yahoo failed for ${ticker}:`, e);
-        return null;
-    }
-};
-
-// 數據源 2: Finnhub (免費 API，需要註冊但有免費配額)
-const fetchFromFinnhub = async (ticker: string): Promise<PriceInfo | null> => {
-    try {
-        const symbol = ticker.toUpperCase();
-        // 使用免費的 demo token，實際使用建議註冊獲取自己的 key
-        const targetUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=demo`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-
-        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-        if (!res.ok) throw new Error("Finnhub API error");
 
         const data = await res.json();
 
-        if (data && data.c && data.c > 0) {
+        if (data && data.price > 0 && !data.error) {
             return {
-                price: data.c, // current price
-                change: data.d || 0, // change
-                changePercent: data.dp || 0, // change percent
-                time: new Date().toLocaleTimeString(),
-                currency: 'USD',
-                source: 'Finnhub'
+                price: data.price,
+                change: data.change || 0,
+                changePercent: data.changePercent || 0,
+                time: data.time ? new Date(data.time).toLocaleTimeString() : new Date().toLocaleTimeString(),
+                currency: data.currency || 'USD',
+                source: data.source || 'API'
             };
         }
-        return null;
+
+        // API 返回了錯誤
+        return {
+            price: 0,
+            change: 0,
+            changePercent: 0,
+            time: '-',
+            currency: '',
+            error: true,
+            source: 'None'
+        };
     } catch (e) {
-        console.warn(`Finnhub failed for ${ticker}:`, e);
-        return null;
+        console.warn(`Quote API failed for ${ticker}:`, e);
+        return {
+            price: 0,
+            change: 0,
+            changePercent: 0,
+            time: '-',
+            currency: '',
+            error: true,
+            source: 'None'
+        };
     }
-};
-
-// 數據源 3: Twelve Data (免費 API)
-const fetchFromTwelveData = async (ticker: string): Promise<PriceInfo | null> => {
-    try {
-        const symbol = ticker.toUpperCase();
-        const targetUrl = `https://api.twelvedata.com/price?symbol=${symbol}&apikey=demo`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-
-        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-        if (!res.ok) throw new Error("TwelveData API error");
-
-        const data = await res.json();
-
-        if (data && data.price && parseFloat(data.price) > 0) {
-            return {
-                price: parseFloat(data.price),
-                change: 0,
-                changePercent: 0,
-                time: new Date().toLocaleTimeString(),
-                currency: 'USD',
-                source: 'TwelveData'
-            };
-        }
-        return null;
-    } catch (e) {
-        console.warn(`TwelveData failed for ${ticker}:`, e);
-        return null;
-    }
-};
-
-// 數據源 4: Marketstack (免費 API)
-const fetchFromMarketstack = async (ticker: string): Promise<PriceInfo | null> => {
-    try {
-        const symbol = ticker.toUpperCase();
-        // 使用 demo 模式
-        const targetUrl = `http://api.marketstack.com/v1/eod/latest?symbols=${symbol}&access_key=demo`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-
-        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-        if (!res.ok) throw new Error("Marketstack API error");
-
-        const data = await res.json();
-
-        if (data && data.data && data.data[0] && data.data[0].close) {
-            const stock = data.data[0];
-            return {
-                price: stock.close,
-                change: stock.close - stock.open,
-                changePercent: ((stock.close - stock.open) / stock.open) * 100,
-                time: new Date().toLocaleTimeString(),
-                currency: 'USD',
-                source: 'Marketstack'
-            };
-        }
-        return null;
-    } catch (e) {
-        console.warn(`Marketstack failed for ${ticker}:`, e);
-        return null;
-    }
-};
-
-// 主獲取函數 - 嘗試多個數據源
-const fetchPriceWithFallback = async (ticker: string): Promise<PriceInfo> => {
-    // 按優先順序嘗試各數據源
-    const sources = [
-        fetchFromYahoo,
-        fetchFromFinnhub,
-        fetchFromTwelveData,
-        fetchFromMarketstack
-    ];
-
-    for (const fetchFn of sources) {
-        const result = await fetchFn(ticker);
-        if (result && result.price > 0) {
-            return result;
-        }
-    }
-
-    // 所有數據源都失敗
-    return {
-        price: 0,
-        change: 0,
-        changePercent: 0,
-        time: '-',
-        currency: '',
-        error: true,
-        source: 'None'
-    };
 };
 
 const RealTimePriceChecker: React.FC<{ weights: Record<string, number> }> = ({ weights }) => {
