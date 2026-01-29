@@ -22,12 +22,9 @@ const LoginPage: React.FC = () => {
           const response = await fetch(`/api/check-user-status?email=${encodeURIComponent(user.email || '')}`);
           const data = await response.json();
 
-          if (data.status === 'approved') {
+          if (data.approved === true) {
             navigate('/app');
-          } else if (data.status === 'pending') {
-            setPendingApproval(true);
           } else {
-            // New user - they'll be added to Airtable on first login
             setPendingApproval(true);
           }
         } catch (err) {

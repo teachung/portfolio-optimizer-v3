@@ -50,7 +50,7 @@ const PortfolioApp: React.FC = () => {
         const response = await fetch(`/api/check-user-status?email=${encodeURIComponent(currentUser.email || '')}`);
         const data = await response.json();
 
-        if (data.status !== 'approved') {
+        if (data.approved !== true) {
           navigate('/login');
           return;
         }
