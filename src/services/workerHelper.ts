@@ -1323,3 +1323,101 @@ export const createWorkerCode = () => {
     };
     `;
 };
+
+// Worker management
+let activeWorkers: Worker[] = [];
+let isOptimizing = false;
+
+export const runOptimizationWorkers = (
+  stockData: any,
+  settings: any,
+  onProgress: (update: any) => void
+): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    const numWorkers = Math.min(navigator.hardwareConcurrency || 4, 8);
+    const simulationsPerWorker = Math.floor(settings.simulations / numWorkers);
+
+    let completedWorkers = 0;
+    let totalSimCount = 0;
+    let totalValidCount = 0;
+    let globalBestScore = settings.optimizeTarget.includes('min_dd') ? Infinity : -Infinity;
+    let globalBestPortfolio: any = null;
+
+    isOptimizing = true;
+    activeWorkers = [];
+
+    const workerCode = createWorkerCode();
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const workerUrl = URL.createObjectURL(blob);
+
+    for (let i = 0; i < numWorkers; i++) {
+      const worker = new Worker(workerUrl);
+      activeWorkers.push(worker);
+
+      worker.onmessage = (e) => {
+        const { type, simCount, validCount, bestScore, bestPortfolio, scatterChunk, message } = e.data;
+
+        if (type === 'progress') {
+          totalSimCount += simCount || 0;
+          totalValidCount += validCount || 0;
+
+          const betterLower = settings.optimizeTarget.includes('min_dd') || settings.optimizeTarget.startsWith('target_return');
+          const isImprovement = betterLower ? (bestScore < globalBestScore) : (bestScore > globalBestScore);
+
+          if (bestPortfolio && isImprovement) {
+            globalBestScore = bestScore;
+            globalBestPortfolio = bestPortfolio;
+          }
+
+          const progress = (totalSimCount / settings.simulations) * 100;
+
+          onProgress({
+            type: 'progress',
+            progress: Math.min(progress, 99),
+            simCount: totalSimCount,
+            totalValidCount,
+            bestScore: globalBestScore,
+            scatterChunk
+          });
+        } else if (type === 'complete') {
+          completedWorkers++;
+
+          if (completedWorkers === numWorkers) {
+            activeWorkers = [];
+            isOptimizing = false;
+            URL.revokeObjectURL(workerUrl);
+
+            onProgress({
+              type: 'complete',
+              bestPortfolio: globalBestPortfolio
+            });
+            resolve();
+          }
+        } else if (type === 'error') {
+          onProgress({ type: 'error', message });
+        }
+      };
+
+      worker.onerror = (error) => {
+        console.error('Worker error:', error);
+        onProgress({ type: 'error', message: error.message });
+        reject(error);
+      };
+
+      worker.postMessage({
+        stockData,
+        settings: { ...settings, simulations: simulationsPerWorker },
+        simulations: simulationsPerWorker,
+        workerId: i
+      });
+    }
+  });
+};
+
+export const stopOptimization = (): void => {
+  if (isOptimizing) {
+    activeWorkers.forEach(worker => worker.terminate());
+    activeWorkers = [];
+    isOptimizing = false;
+  }
+};

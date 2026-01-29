@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { PortfolioParams, OptimizationSettings, PriorityStockConfig, HedgeConfig } from '../types';
-import { initializeWasm, isWasmAvailable, setAlgorithmImplementation, type AlgorithmImplementation } from '../services/wasm';
+import { PortfolioParams, OptimizationSettings, PriorityStockConfig, HedgeConfig } from '../../types';
+import { initializeWasm, isWasmAvailable, setAlgorithmImplementation, type AlgorithmImplementation } from '../../services/wasm';
 
 interface ParamsSettingsProps {
   initialParams: PortfolioParams;

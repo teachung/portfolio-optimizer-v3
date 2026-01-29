@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { OptimizationSettings } from '../types';
+import { OptimizationSettings } from '../../types';
 
 interface RunOptimizationProps {
   isRunning: boolean;

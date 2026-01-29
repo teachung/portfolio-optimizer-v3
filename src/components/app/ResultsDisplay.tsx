@@ -2,8 +2,8 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Chart, registerables, Plugin, InteractionItem } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
-import { OptimizationResult, OptimizationSettings, StockData, ScatterPoint, Metrics, StockMetrics, MonthlyReturn } from '../types';
-import { calculatePortfolioPerformance, calculateMonthlyReturns, calculateAssetRotation, calculateCurrentCyclePositions, sliceStockData, calculateMetrics } from '../services/portfolioCalculator';
+import { OptimizationResult, OptimizationSettings, StockData, ScatterPoint, Metrics, StockMetrics, MonthlyReturn } from '../../types';
+import { calculatePortfolioPerformance, calculateMonthlyReturns, calculateAssetRotation, calculateCurrentCyclePositions, sliceStockData, calculateMetrics } from '../../services/portfolioCalculator';
 
 Chart.register(...registerables, zoomPlugin);
 

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { StockData, PortfolioParams } from '../types';
+import { StockData, PortfolioParams } from '../../types';
 
 interface DataInputProps {
   onDataParsed: (data: { stockData: StockData; params: PortfolioParams }) => void;
