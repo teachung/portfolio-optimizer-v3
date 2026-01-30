@@ -70,7 +70,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
     } catch (error) {
       setSubmitResult({
         success: false,
-        message: language === 'zh' ? '提交失敗，請稍後再試' : 'Failed to submit, please try again'
+        message: language === 'zh-TW' ? '提交失敗，請稍後再試' : 'Failed to submit, please try again'
       });
     } finally {
       setSubmitting(false);
@@ -110,7 +110,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
         }`}>
           <Flame size={16} className={isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'} />
           <span className={`text-sm font-bold ${isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'}`}>
-            {language === 'zh'
+            {language === 'zh-TW'
               ? `本月試用名額：${quota.remaining}/${quota.total}`
               : `Trial spots this month: ${quota.remaining}/${quota.total}`
             }
@@ -132,7 +132,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
             />
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            {language === 'zh'
+            {language === 'zh-TW'
               ? '名額有限 · 額滿需排隊等候'
               : 'Limited spots · Queue when full'
             }
@@ -145,7 +145,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
             <div className="flex items-center gap-2 mb-3">
               <Clock size={16} className="text-orange-400" />
               <span className="text-sm font-semibold text-white">
-                {language === 'zh' ? '本月名額已滿' : 'Spots full this month'}
+                {language === 'zh-TW' ? '本月名額已滿' : 'Spots full this month'}
               </span>
             </div>
 
@@ -156,7 +156,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder={language === 'zh' ? '輸入 Email 排隊' : 'Enter email to queue'}
+                    placeholder={language === 'zh-TW' ? '輸入 Email 排隊' : 'Enter email to queue'}
                     className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                     disabled={submitting}
                   />
@@ -181,7 +181,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white text-sm font-semibold rounded-lg transition-all"
                 >
                   <CreditCard size={16} />
-                  {language === 'zh' ? '直接付費成為 Pro 會員' : 'Pay now for Pro membership'}
+                  {language === 'zh-TW' ? '直接付費成為 Pro 會員' : 'Pay now for Pro membership'}
                 </button>
               </>
             ) : (
@@ -210,7 +210,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
         <div className="flex items-center gap-2">
           <Flame size={20} className={isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'} />
           <span className="font-bold text-white">
-            {language === 'zh' ? '試用名額' : 'Trial Spots'}
+            {language === 'zh-TW' ? '試用名額' : 'Trial Spots'}
           </span>
         </div>
         <span className={`text-2xl font-bold ${isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'}`}>
@@ -235,10 +235,10 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
       {/* Status Text */}
       <p className="text-sm text-slate-400 mb-4">
         {isFull
-          ? (language === 'zh' ? '本月名額已滿，可排隊等候或直接付費' : 'Full this month. Queue or pay now.')
+          ? (language === 'zh-TW' ? '本月名額已滿，可排隊等候或直接付費' : 'Full this month. Queue or pay now.')
           : isLow
-            ? (language === 'zh' ? '名額即將額滿，把握機會！' : 'Almost full, grab yours now!')
-            : (language === 'zh' ? '名額充足，立即開始試用' : 'Spots available, start now!')
+            ? (language === 'zh-TW' ? '名額即將額滿，把握機會！' : 'Almost full, grab yours now!')
+            : (language === 'zh-TW' ? '名額充足，立即開始試用' : 'Spots available, start now!')
         }
       </p>
 
@@ -252,7 +252,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={language === 'zh' ? '輸入 Email 排隊' : 'Enter email to queue'}
+                  placeholder={language === 'zh-TW' ? '輸入 Email 排隊' : 'Enter email to queue'}
                   className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                   disabled={submitting}
                 />
@@ -261,7 +261,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
                   disabled={submitting || !email}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {language === 'zh' ? '排隊' : 'Queue'}
+                  {language === 'zh-TW' ? '排隊' : 'Queue'}
                 </button>
               </form>
 
@@ -278,7 +278,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
                 </div>
                 <div className="relative flex justify-center text-xs">
                   <span className="px-2 bg-[#0B1120] text-slate-500">
-                    {language === 'zh' ? '或' : 'or'}
+                    {language === 'zh-TW' ? '或' : 'or'}
                   </span>
                 </div>
               </div>
@@ -288,7 +288,7 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white font-semibold rounded-lg transition-all"
               >
                 <CreditCard size={18} />
-                {language === 'zh' ? '直接付費跳過排隊' : 'Pay now to skip queue'}
+                {language === 'zh-TW' ? '直接付費跳過排隊' : 'Pay now to skip queue'}
               </button>
             </>
           ) : (
