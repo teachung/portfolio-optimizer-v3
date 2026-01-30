@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { ArrowRight } from 'lucide-react';
 import { useTranslation } from '../../contexts/LanguageContext';
@@ -129,7 +130,22 @@ const RenderShape = (props: any) => {
 
 export const Hero: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [data, setData] = useState<any[]>([]);
+
+  const handleLogin = () => {
+    navigate('/login');
+  };
+
+  const scrollToFeatures = () => {
+    const target = document.getElementById('redbox');
+    if (target) {
+      const headerOffset = 80;
+      const elementPosition = target.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({ top: offsetPosition, behavior: 'auto' });
+    }
+  };
 
   useEffect(() => {
     setData(generateRealisticFrontierData(1000));
@@ -177,11 +193,15 @@ export const Hero: React.FC = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <button className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold rounded-full transition-all hover:scale-105 hover:shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:-translate-y-1 flex items-center justify-center gap-2">
+              <button
+                onClick={handleLogin}
+                className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold rounded-full transition-all hover:scale-105 hover:shadow-[0_0_30px_rgba(16,185,129,0.3)] hover:-translate-y-1 flex items-center justify-center gap-2">
                  {t('hero.cta_start')} <ArrowRight size={18} />
               </button>
-              
-              <button className="px-8 py-4 bg-transparent text-white font-semibold rounded-full border border-fuchsia-500/50 hover:border-fuchsia-500 hover:text-fuchsia-400 hover:bg-fuchsia-500/10 transition-all hover:-translate-y-1 flex items-center justify-center">
+
+              <button
+                onClick={scrollToFeatures}
+                className="px-8 py-4 bg-transparent text-white font-semibold rounded-full border border-fuchsia-500/50 hover:border-fuchsia-500 hover:text-fuchsia-400 hover:bg-fuchsia-500/10 transition-all hover:-translate-y-1 flex items-center justify-center">
                  {t('hero.cta_demo')}
               </button>
             </div>

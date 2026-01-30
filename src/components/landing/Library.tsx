@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from '../../contexts/LanguageContext';
-import { Sparkles, Bell } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 export const Library: React.FC = () => {
   const { t } = useTranslation();
@@ -57,15 +57,9 @@ export const Library: React.FC = () => {
               </div>
 
               {/* Description */}
-              <p className="text-slate-400 text-lg max-w-md mx-auto mb-8 leading-relaxed">
+              <p className="text-slate-400 text-lg max-w-md mx-auto leading-relaxed">
                 {t('library.coming_soon.desc')}
               </p>
-
-              {/* Notify Button */}
-              <button className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-semibold transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-emerald-500/20">
-                <Bell size={18} />
-                {t('library.coming_soon.notify')}
-              </button>
             </div>
           </div>
         </div>

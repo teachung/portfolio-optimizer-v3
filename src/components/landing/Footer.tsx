@@ -18,33 +18,26 @@ export const Footer: React.FC = () => {
             </span>
         </div>
 
-        {/* Social Links - Simplified as requested */}
+        {/* Social Links - No links for now */}
         <div className="flex items-center gap-8 mb-10">
-            <a 
-                href="mailto:hello@portfolioblender.com" 
-                className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-emerald-500 hover:bg-emerald-500/10 transition-all duration-300 group"
-                title="Email Us"
+            <div
+                className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 cursor-default"
+                title="Email"
             >
                 <Mail size={20} />
-            </a>
-            <a 
-                href="https://instagram.com" 
-                target="_blank" 
-                rel="noreferrer"
-                className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-pink-500 hover:bg-pink-500/10 transition-all duration-300 group"
+            </div>
+            <div
+                className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 cursor-default"
                 title="Instagram"
             >
                 <Instagram size={20} />
-            </a>
-            <a 
-                href="https://threads.net" 
-                target="_blank" 
-                rel="noreferrer"
-                className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:border-white hover:bg-white/10 transition-all duration-300 group"
+            </div>
+            <div
+                className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 cursor-default"
                 title="Threads"
             >
                 <AtSign size={20} />
-            </a>
+            </div>
         </div>
 
         {/* Copyright */}

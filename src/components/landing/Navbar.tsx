@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Logo } from './Logo';
 import { Menu, X, Globe } from 'lucide-react';
 import { useTranslation } from '../../contexts/LanguageContext';
@@ -6,14 +7,7 @@ import { useTranslation } from '../../contexts/LanguageContext';
 export const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = React.useState(false);
   const { t, language, toggleLanguage } = useTranslation();
-
-  // Custom easing function (easeInOutCubic) for a very smooth feel
-  const easeInOutCubic = (t: number, b: number, c: number, d: number) => {
-    t /= d / 2;
-    if (t < 1) return c / 2 * t * t * t + b;
-    t -= 2;
-    return c / 2 * (t * t * t + 2) + b;
-  };
+  const navigate = useNavigate();
 
   const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
     e.preventDefault();
@@ -24,32 +18,17 @@ export const Navbar: React.FC = () => {
 
     const headerOffset = 80;
     const elementPosition = target.getBoundingClientRect().top;
-    const startPosition = window.pageYOffset;
-    // Calculate final position
-    const offsetPosition = elementPosition + startPosition - headerOffset;
-    const distance = offsetPosition - startPosition;
-    
-    // Calculate duration based on distance, but generally slower. 
-    // Target approx 1600ms for a typical viewport scroll.
-    // Base 800ms + (distance * 0.8) capped at 2500ms for very long pages.
-    const duration = Math.min(2500, Math.max(1200, Math.abs(distance) * 0.8));
-    
-    let startTime: number | null = null;
+    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
 
-    const animation = (currentTime: number) => {
-      if (startTime === null) startTime = currentTime;
-      const timeElapsed = currentTime - startTime;
-      
-      const run = easeInOutCubic(timeElapsed, startPosition, distance, duration);
-      
-      window.scrollTo(0, run);
+    // Instant scroll - no delay
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: 'auto'
+    });
+  };
 
-      if (timeElapsed < duration) {
-        requestAnimationFrame(animation);
-      }
-    };
-
-    requestAnimationFrame(animation);
+  const handleLogin = () => {
+    navigate('/login');
   };
 
   return (
@@ -103,7 +82,9 @@ export const Navbar: React.FC = () => {
               <span>{language === 'en' ? 'EN' : '繁中'}</span>
             </button>
 
-            <button className="bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-6 py-2 rounded-full text-sm font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] hover:-translate-y-1">
+            <button
+              onClick={handleLogin}
+              className="bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-6 py-2 rounded-full text-sm font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] hover:-translate-y-1">
               {t('nav.launch')}
             </button>
           </div>
@@ -154,7 +135,9 @@ export const Navbar: React.FC = () => {
             >
                {t('nav.pricing')}
             </a>
-            <button className="w-full mt-6 bg-emerald-500 text-slate-900 px-4 py-3 rounded-md text-base font-bold">
+            <button
+              onClick={handleLogin}
+              className="w-full mt-6 bg-emerald-500 text-slate-900 px-4 py-3 rounded-md text-base font-bold">
                {t('nav.launch')}
             </button>
           </div>

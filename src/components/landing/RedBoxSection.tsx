@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, BarChart, Bar, Cell, CartesianGrid, LabelList } from 'recharts';
 import { useTranslation } from '../../contexts/LanguageContext';
 import { Bot, Shield, Zap, Lock, Activity, TrendingUp } from 'lucide-react';
@@ -69,6 +70,11 @@ const ChartContainer: React.FC<{
 
 export const RedBoxSection: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  const handleLogin = () => {
+    navigate('/login');
+  };
 
   // Mock Data for curve chart - Adjusted for more dramatic difference
   const curveData = Array.from({length: 40}, (_, i) => {
@@ -292,7 +298,9 @@ export const RedBoxSection: React.FC = () => {
                         </div>
 
                         {/* Unlock Button */}
-                        <button className="w-full group relative overflow-hidden rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 p-[1px] shadow-lg transition-all hover:shadow-fuchsia-500/25 active:scale-[0.99]">
+                        <button
+                            onClick={handleLogin}
+                            className="w-full group relative overflow-hidden rounded-xl bg-gradient-to-r from-fuchsia-600 to-purple-600 p-[1px] shadow-lg transition-all hover:shadow-fuchsia-500/25 active:scale-[0.99]">
                             <div className="relative flex items-center justify-between rounded-[11px] bg-[#1a1625] px-6 py-4 transition-colors group-hover:bg-opacity-80">
                                 <div className="flex items-center gap-3">
                                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-fuchsia-500/20 text-fuchsia-400">
