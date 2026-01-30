@@ -10,7 +10,7 @@ interface QuotaData {
 }
 
 interface TrialQuotaProps {
-  variant?: 'hero' | 'pricing';
+  variant?: 'hero' | 'pricing' | 'card';
   showWaitlistForm?: boolean;
 }
 
@@ -100,19 +100,19 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
   if (variant === 'hero') {
     return (
       <div className="mt-6">
-        {/* Quota Display */}
-        <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${
+        {/* Quota Display - Bolder and more prominent */}
+        <div className={`inline-flex items-center gap-3 px-5 py-3 rounded-full ${
           isFull
-            ? 'bg-red-500/10 border border-red-500/30'
+            ? 'bg-red-500/20 border-2 border-red-500/50'
             : isLow
-              ? 'bg-orange-500/10 border border-orange-500/30'
-              : 'bg-emerald-500/10 border border-emerald-500/30'
+              ? 'bg-orange-500/20 border-2 border-orange-500/50'
+              : 'bg-emerald-500/20 border-2 border-emerald-500/50'
         }`}>
-          <Flame size={16} className={isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'} />
-          <span className={`text-sm font-bold ${isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'}`}>
+          <Flame size={20} className={isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'} />
+          <span className={`text-base font-extrabold tracking-wide ${isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'}`}>
             {language === 'zh-TW'
-              ? `本月試用名額：${quota.remaining}/${quota.total}`
-              : `Trial spots this month: ${quota.remaining}/${quota.total}`
+              ? `🔥 本月試用名額：${quota.remaining}/${quota.total}`
+              : `🔥 Trial spots: ${quota.remaining}/${quota.total}`
             }
           </span>
         </div>
@@ -196,7 +196,56 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
     );
   }
 
-  // Pricing variant - card style
+  // Card variant - compact for inside pricing card
+  if (variant === 'card') {
+    return (
+      <div className={`mt-4 p-4 rounded-xl border ${
+        isFull
+          ? 'bg-red-500/10 border-red-500/30'
+          : isLow
+            ? 'bg-orange-500/10 border-orange-500/30'
+            : 'bg-emerald-500/10 border-emerald-500/30'
+      }`}>
+        {/* Quota Display */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Flame size={16} className={isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'} />
+            <span className={`text-sm font-bold ${isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'}`}>
+              {language === 'zh-TW' ? '本月名額' : 'Spots'}
+            </span>
+          </div>
+          <span className={`text-lg font-extrabold ${isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'}`}>
+            {quota.remaining}/{quota.total}
+          </span>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden mb-2">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              isFull
+                ? 'bg-red-500'
+                : isLow
+                  ? 'bg-gradient-to-r from-orange-500 to-yellow-500'
+                  : 'bg-gradient-to-r from-emerald-500 to-sky-500'
+            }`}
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+
+        <p className="text-xs text-slate-500">
+          {isFull
+            ? (language === 'zh-TW' ? '名額已滿，請排隊或付費' : 'Full, queue or pay now')
+            : isLow
+              ? (language === 'zh-TW' ? '即將額滿！' : 'Almost full!')
+              : (language === 'zh-TW' ? '名額充足' : 'Available')
+          }
+        </p>
+      </div>
+    );
+  }
+
+  // Pricing variant - card style (standalone above cards)
   return (
     <div className={`p-6 rounded-2xl border ${
       isFull

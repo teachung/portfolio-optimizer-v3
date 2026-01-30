@@ -31,10 +31,11 @@ interface PricingCardProps {
   variant: 'trial' | 'pro' | 'enterprise';
   onCtaClick: () => void;
   contactEmail?: string;
+  children?: React.ReactNode;
 }
 
 const PricingCard: React.FC<PricingCardProps> = ({
-  tier, title, price, period, subtitle, features, cta, variant, onCtaClick, contactEmail
+  tier, title, price, period, subtitle, features, cta, variant, onCtaClick, contactEmail, children
 }) => {
   const isPro = variant === 'pro';
   const isEnterprise = variant === 'enterprise';
@@ -134,6 +135,9 @@ const PricingCard: React.FC<PricingCardProps> = ({
           ))}
         </ul>
 
+        {/* Optional children (e.g., quota display) */}
+        {children}
+
         <button
           onClick={handleClick}
           className={`w-full py-4 rounded-xl font-bold transition-all hover:-translate-y-1 ${btnStyle}`}
@@ -185,11 +189,6 @@ export const Pricing: React.FC = () => {
             </div>
         </div>
 
-        {/* Trial Quota Display */}
-        <div className="mb-12 max-w-md">
-          <TrialQuota variant="pricing" />
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto items-stretch pt-4">
           <PricingCard
             tier={t('pricing.trial.tier')}
@@ -201,7 +200,10 @@ export const Pricing: React.FC = () => {
             cta={t('pricing.trial.cta')}
             variant="trial"
             onCtaClick={handleCtaClick}
-          />
+          >
+            {/* Trial Quota integrated into card */}
+            <TrialQuota variant="card" showWaitlistForm={false} />
+          </PricingCard>
           <PricingCard
             tier={t('pricing.pro.tier')}
             title={t('pricing.pro.title')}
