@@ -57,17 +57,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userRecordId = checkData.records[0].id;
 
-    // 2. 上傳圖片到 Airtable
-    // Airtable 需要一個公開可訪問的 URL 來添加附件
-    // 我們需要先將 base64 圖片上傳到某個服務，或者使用 Airtable 的上傳 API
+    // 2. 先上傳圖片到臨時託管服務 (litterbox - 72小時有效)
+    // 這樣 Airtable 可以從 URL 下載圖片
+    const imageBuffer = Buffer.from(imageData, 'base64');
 
-    // 方法：使用 Airtable 的 attachment URL 方式
-    // 我們需要將 base64 轉換為可訪問的 URL
-    // 使用 data URI 作為臨時解決方案（Airtable 支持 data URI）
+    const formData = new FormData();
+    formData.append('reqtype', 'fileupload');
+    formData.append('time', '72h');
+    formData.append('fileToUpload', new Blob([imageBuffer], { type: contentType || 'image/png' }), fileName || 'payment_proof.png');
 
-    const dataUri = `data:${contentType || 'image/png'};base64,${imageData}`;
+    const uploadResponse = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
+      method: 'POST',
+      body: formData,
+    });
 
-    // 更新用戶記錄，添加 PaymentProof 附件
+    if (!uploadResponse.ok) {
+      console.error('Image upload failed:', await uploadResponse.text());
+      return res.status(500).json({ error: 'Failed to upload image' });
+    }
+
+    const imageUrl = await uploadResponse.text();
+
+    if (!imageUrl.startsWith('http')) {
+      console.error('Invalid image URL:', imageUrl);
+      return res.status(500).json({ error: 'Failed to get image URL' });
+    }
+
+    // 3. 更新用戶記錄，添加 PaymentProof 附件
     const updateResponse = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${userRecordId}`, {
       method: 'PATCH',
       headers: {
@@ -78,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fields: {
           PaymentProof: [
             {
-              url: dataUri,
+              url: imageUrl,
               filename: fileName || `payment_proof_${Date.now()}.png`
             }
           ]
@@ -89,12 +105,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!updateResponse.ok) {
       const errorData = await updateResponse.json();
       console.error('Airtable update error:', errorData);
-
-      // 如果 data URI 不支持，嘗試使用免費圖片上傳服務
-      // 這裡我們返回錯誤讓前端知道
       return res.status(500).json({
-        error: 'Failed to upload payment proof',
-        details: 'Please try again with a smaller image'
+        error: 'Failed to save payment proof to database',
+        details: errorData
       });
     }
 
