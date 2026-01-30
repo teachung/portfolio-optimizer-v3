@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import { useTranslation } from '../contexts/LanguageContext';
 import { Logo } from '../components/landing/Logo';
-import { Loader2, AlertCircle, Clock } from 'lucide-react';
+import { Loader2, AlertCircle, Clock, Upload, CheckCircle, CreditCard, QrCode } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const { t, language, setLanguage } = useTranslation();
@@ -13,10 +13,16 @@ const LoginPage: React.FC = () => {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        setUserEmail(user.email);
         // Check user status in Airtable
         try {
           const response = await fetch(`/api/check-user-status?email=${encodeURIComponent(user.email || '')}`);
@@ -25,6 +31,7 @@ const LoginPage: React.FC = () => {
           if (data.approved === true) {
             navigate('/app');
           } else {
+            // User is pending or new - show pending message
             setPendingApproval(true);
           }
         } catch (err) {
@@ -36,6 +43,65 @@ const LoginPage: React.FC = () => {
 
     return () => unsubscribe();
   }, [navigate]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userEmail) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setUploadError(language === 'zh-TW' ? '請上傳圖片檔案' : 'Please upload an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError(language === 'zh-TW' ? '圖片大小不能超過 5MB' : 'Image size cannot exceed 5MB');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError(null);
+
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = (reader.result as string).split(',')[1];
+
+        const response = await fetch('/api/upload-payment-proof', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: userEmail,
+            imageData: base64,
+            fileName: file.name,
+            contentType: file.type
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setUploadSuccess(true);
+        } else {
+          setUploadError(data.error || (language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again'));
+        }
+        setUploading(false);
+      };
+
+      reader.onerror = () => {
+        setUploadError(language === 'zh-TW' ? '讀取檔案失敗' : 'Failed to read file');
+        setUploading(false);
+      };
+
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Upload error:', err);
+      setUploadError(language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again');
+      setUploading(false);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -94,13 +160,131 @@ const LoginPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Pending Approval Message */}
+            {/* Pending Approval Message with Payment Options */}
             {pendingApproval && (
-              <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
-                <Clock className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
-                <p className="text-amber-200 text-sm">
-                  {t('login.pending')}
-                </p>
+              <div className="mb-6 space-y-6">
+                {/* Pending Status */}
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
+                  <Clock className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                  <p className="text-amber-200 text-sm">
+                    {t('login.pending')}
+                  </p>
+                </div>
+
+                {/* Payment Section */}
+                <div className="p-6 rounded-xl bg-slate-800/50 border border-slate-700">
+                  <div className="flex items-center gap-2 mb-4">
+                    <CreditCard className="w-5 h-5 text-emerald-400" />
+                    <h3 className="text-lg font-bold text-white">
+                      {language === 'zh-TW' ? '付款方式' : 'Payment Methods'}
+                    </h3>
+                  </div>
+
+                  <p className="text-slate-400 text-sm mb-4">
+                    {language === 'zh-TW'
+                      ? '請使用以下方式付款，完成後上傳截圖：'
+                      : 'Please pay using the methods below, then upload screenshot:'}
+                  </p>
+
+                  {/* QR Codes Grid */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    {/* PayMe QR Code */}
+                    <div className="p-4 bg-slate-900 rounded-xl border border-slate-700 text-center">
+                      <div className="w-full aspect-square bg-white rounded-lg mb-2 flex items-center justify-center overflow-hidden">
+                        {/* 請將此處的 src 替換為您的 PayMe QR code 圖片 URL */}
+                        <img
+                          src="/payme-qr.png"
+                          alt="PayMe QR Code"
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            // Fallback if image not found
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        <div className="hidden flex-col items-center justify-center text-slate-400">
+                          <QrCode size={48} />
+                          <span className="text-xs mt-2">PayMe</span>
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-emerald-400">PayMe</span>
+                    </div>
+
+                    {/* FPS QR Code */}
+                    <div className="p-4 bg-slate-900 rounded-xl border border-slate-700 text-center">
+                      <div className="w-full aspect-square bg-white rounded-lg mb-2 flex items-center justify-center overflow-hidden">
+                        {/* 請將此處的 src 替換為您的 FPS QR code 圖片 URL */}
+                        <img
+                          src="/fps-qr.png"
+                          alt="FPS QR Code"
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            // Fallback if image not found
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        <div className="hidden flex-col items-center justify-center text-slate-400">
+                          <QrCode size={48} />
+                          <span className="text-xs mt-2">FPS</span>
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold text-sky-400">FPS 轉數快</span>
+                    </div>
+                  </div>
+
+                  {/* Upload Section */}
+                  <div className="border-t border-slate-700 pt-4">
+                    <p className="text-slate-300 text-sm font-medium mb-3">
+                      {language === 'zh-TW'
+                        ? '付款後請上傳截圖：'
+                        : 'After payment, upload screenshot:'}
+                    </p>
+
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      accept="image/*"
+                      className="hidden"
+                    />
+
+                    {uploadSuccess ? (
+                      <div className="flex items-center gap-2 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                        <CheckCircle className="w-5 h-5 text-emerald-400" />
+                        <span className="text-emerald-300 text-sm">
+                          {language === 'zh-TW'
+                            ? '付款證明已上傳！我們會在 1-2 個工作天內審核。'
+                            : 'Payment proof uploaded! We will review within 1-2 business days.'}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploading}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-semibold transition-all disabled:opacity-50"
+                        >
+                          {uploading ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <>
+                              <Upload size={18} />
+                              {language === 'zh-TW' ? '上傳付款截圖' : 'Upload Payment Screenshot'}
+                            </>
+                          )}
+                        </button>
+
+                        {uploadError && (
+                          <div className="mt-3 flex items-center gap-2 text-red-400 text-sm">
+                            <AlertCircle size={14} />
+                            {uploadError}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 

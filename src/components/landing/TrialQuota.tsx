@@ -111,8 +111,8 @@ export const TrialQuota: React.FC<TrialQuotaProps> = ({
           <Flame size={20} className={isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'} />
           <span className={`text-base font-extrabold tracking-wide ${isFull ? 'text-red-400' : isLow ? 'text-orange-400' : 'text-emerald-400'}`}>
             {language === 'zh-TW'
-              ? `🔥 本月試用名額：${quota.remaining}/${quota.total}`
-              : `🔥 Trial spots: ${quota.remaining}/${quota.total}`
+              ? `🔥 本月試用名額剩餘：${quota.remaining}/${quota.total}`
+              : `🔥 Trial spots remaining: ${quota.remaining}/${quota.total}`
             }
           </span>
         </div>
