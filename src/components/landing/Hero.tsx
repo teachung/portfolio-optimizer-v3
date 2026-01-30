@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { ArrowRight } from 'lucide-react';
 import { useTranslation } from '../../contexts/LanguageContext';
+import { TrialQuota } from './TrialQuota';
 
 // Color interpolation function
 const interpolateColor = (value: number) => {
@@ -205,7 +206,10 @@ export const Hero: React.FC = () => {
                  {t('hero.cta_demo')}
               </button>
             </div>
-            
+
+            {/* Trial Quota Display */}
+            <TrialQuota variant="hero" />
+
             <div className="grid grid-cols-3 gap-8 pt-8 border-t border-white/5">
                <div>
                   <div className="text-2xl font-bold text-white mb-1">100K+</div>

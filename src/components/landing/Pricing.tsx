@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Check, Bot, Zap, Shield, Sparkles, Building2, Users, Code, LineChart, Lock, Target, Star, Briefcase } from 'lucide-react';
 import { useTranslation } from '../../contexts/LanguageContext';
+import { TrialQuota } from './TrialQuota';
 
 const FeatureIcon: React.FC<{ index: number; variant: 'trial' | 'pro' | 'enterprise' }> = ({ index, variant }) => {
   if (variant === 'trial') {
@@ -182,6 +183,11 @@ export const Pricing: React.FC = () => {
             <div className="max-w-md text-slate-400 text-lg md:text-right leading-relaxed">
                 {t('pricing.desc')}
             </div>
+        </div>
+
+        {/* Trial Quota Display */}
+        <div className="mb-12 max-w-md">
+          <TrialQuota variant="pricing" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto items-stretch pt-4">
