@@ -1,4 +1,4 @@
-// Vercel Serverless Function - 上傳付款證明到 Airtable
+// Vercel Serverless Function - 上傳付款證明（透過 Google Apps Script）
 import { VercelRequest, VercelResponse } from '@vercel/node';
 
 export const config = {
@@ -29,92 +29,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Email and image data are required' });
   }
 
-  const { AIRTABLE_API_KEY, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME = 'Users' } = process.env;
+  const GOOGLE_SCRIPT_URL = process.env.VITE_GOOGLE_SCRIPT_URL;
 
-  if (!AIRTABLE_API_KEY || !AIRTABLE_BASE_ID) {
-    console.error('Missing Airtable configuration');
+  if (!GOOGLE_SCRIPT_URL) {
+    console.error('Missing Google Script URL');
     return res.status(500).json({ error: 'Server configuration error' });
   }
 
   try {
-    // 1. 找到用戶記錄
-    const filterFormula = encodeURIComponent(`{Email}='${email}'`);
-    const checkUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}?filterByFormula=${filterFormula}`;
-
-    const checkResponse = await fetch(checkUrl, {
-      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
-    });
-
-    if (!checkResponse.ok) {
-      return res.status(500).json({ error: 'Failed to find user' });
-    }
-
-    const checkData = await checkResponse.json() as { records: Array<{ id: string; fields: any }> };
-
-    if (!checkData.records || checkData.records.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const userRecordId = checkData.records[0].id;
-
-    // 2. 先上傳圖片到臨時託管服務 (litterbox - 72小時有效)
-    // 這樣 Airtable 可以從 URL 下載圖片
-    const imageBuffer = Buffer.from(imageData, 'base64');
-
-    const formData = new FormData();
-    formData.append('reqtype', 'fileupload');
-    formData.append('time', '72h');
-    formData.append('fileToUpload', new Blob([imageBuffer], { type: contentType || 'image/png' }), fileName || 'payment_proof.png');
-
-    const uploadResponse = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
+    // 透過 Vercel 伺服器端調用 Google Apps Script（避免 CORS 問題）
+    const response = await fetch(GOOGLE_SCRIPT_URL, {
       method: 'POST',
-      body: formData,
-    });
-
-    if (!uploadResponse.ok) {
-      console.error('Image upload failed:', await uploadResponse.text());
-      return res.status(500).json({ error: 'Failed to upload image' });
-    }
-
-    const imageUrl = await uploadResponse.text();
-
-    if (!imageUrl.startsWith('http')) {
-      console.error('Invalid image URL:', imageUrl);
-      return res.status(500).json({ error: 'Failed to get image URL' });
-    }
-
-    // 3. 更新用戶記錄，添加 PaymentProof 附件
-    const updateResponse = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${userRecordId}`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        fields: {
-          PaymentProof: [
-            {
-              url: imageUrl,
-              filename: fileName || `payment_proof_${Date.now()}.png`
-            }
-          ]
-        }
-      }),
+        email,
+        imageData,
+        fileName,
+        contentType
+      })
     });
 
-    if (!updateResponse.ok) {
-      const errorData = await updateResponse.json();
-      console.error('Airtable update error:', errorData);
+    const responseText = await response.text();
+
+    // 嘗試解析 JSON
+    try {
+      const data = JSON.parse(responseText);
+      return res.status(200).json(data);
+    } catch {
+      // 如果不是 JSON，可能是錯誤
+      console.error('Google Script response:', responseText);
       return res.status(500).json({
-        error: 'Failed to save payment proof to database',
-        details: errorData
+        error: 'Upload service error',
+        details: responseText
       });
     }
-
-    return res.status(200).json({
-      success: true,
-      message: '付款證明已上傳！我們會在 1-2 個工作天內審核。'
-    });
 
   } catch (error) {
     console.error('API Error:', error);

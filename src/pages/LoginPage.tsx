@@ -69,25 +69,32 @@ const LoginPage: React.FC = () => {
       reader.onload = async () => {
         const base64 = (reader.result as string).split(',')[1];
 
-        const response = await fetch('/api/upload-payment-proof', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: userEmail,
-            imageData: base64,
-            fileName: file.name,
-            contentType: file.type
-          })
-        });
+        try {
+          // 發送到 Vercel API（由 API 轉發到 Google Apps Script）
+          const response = await fetch('/api/upload-payment-proof', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: userEmail,
+              imageData: base64,
+              fileName: file.name,
+              contentType: file.type
+            })
+          });
 
-        const data = await response.json();
+          const data = await response.json();
 
-        if (data.success) {
-          setUploadSuccess(true);
-        } else {
-          setUploadError(data.error || (language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again'));
+          if (data.success) {
+            setUploadSuccess(true);
+          } else {
+            setUploadError(data.error || data.message || (language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again'));
+          }
+          setUploading(false);
+        } catch (fetchErr) {
+          console.error('Fetch error:', fetchErr);
+          setUploadError(language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again');
+          setUploading(false);
         }
-        setUploading(false);
       };
 
       reader.onerror = () => {
