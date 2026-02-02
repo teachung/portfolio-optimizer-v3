@@ -216,6 +216,14 @@ const LoginPage: React.FC = () => {
                     </h3>
                   </div>
 
+                  <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 mb-4">
+                    <p className="text-emerald-300 text-sm font-semibold text-center">
+                      {language === 'zh-TW'
+                        ? '💰 Trial 價格：HK$50 / 月'
+                        : '💰 Trial Price: HK$50 / month'}
+                    </p>
+                  </div>
+
                   <p className="text-slate-400 text-sm mb-4">
                     {language === 'zh-TW'
                       ? '請使用以下方式付款，完成後上傳截圖：'
