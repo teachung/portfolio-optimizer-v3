@@ -17,6 +17,8 @@ const LoginPage: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [userPlan, setUserPlan] = useState<string | null>(null);
+  const [paymentCount, setPaymentCount] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -33,6 +35,8 @@ const LoginPage: React.FC = () => {
           } else {
             // User is pending or new - show pending message
             setPendingApproval(true);
+            setUserPlan(data.plan || null);
+            setPaymentCount(data.paymentCount || 0);
           }
         } catch (err) {
           console.error('Error checking user status:', err);
@@ -218,9 +222,19 @@ const LoginPage: React.FC = () => {
 
                   <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 mb-4">
                     <p className="text-emerald-300 text-sm font-semibold text-center">
-                      {language === 'zh-TW'
-                        ? '💰 Trial 價格：HK$50 / 月'
-                        : '💰 Trial Price: HK$50 / month'}
+                      {(() => {
+                        // 根據用戶狀態顯示不同價格
+                        // Trial (新用戶): HK$1
+                        // 首月 (Trial 到期，paymentCount === 1): HK$500
+                        // 正式 (已付過首月，paymentCount >= 2): HK$1,000
+                        if (!userPlan && paymentCount === 0) {
+                          return language === 'zh-TW' ? '💰 Trial 價格：HK$1' : '💰 Trial Price: HK$1';
+                        } else if (userPlan === 'Trial' || paymentCount === 1) {
+                          return language === 'zh-TW' ? '💰 首月優惠價：HK$500' : '💰 First Month: HK$500';
+                        } else {
+                          return language === 'zh-TW' ? '💰 月費：HK$1,000' : '💰 Monthly: HK$1,000';
+                        }
+                      })()}
                     </p>
                   </div>
 

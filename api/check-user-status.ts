@@ -38,15 +38,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Failed to query Airtable' });
     }
 
-    const data = await response.json() as { records: Array<{ id: string; fields: { Email?: string; Status?: boolean } }> };
+    const data = await response.json() as { records: Array<{ id: string; fields: { Email?: string; Status?: boolean; Plan?: string; PaymentCount?: number } }> };
 
     if (data.records && data.records.length > 0) {
       // 用戶已存在，檢查審批狀態
-      const isApproved = data.records[0].fields.Status === true;
+      const userFields = data.records[0].fields;
+      const isApproved = userFields.Status === true;
+      const plan = userFields.Plan || null;
+      const paymentCount = userFields.PaymentCount || 0;
+
       return res.status(200).json({
         approved: isApproved,
         status: isApproved ? 'Approved' : 'Pending',
-        message: isApproved ? '已通過審批' : '等待管理員審批'
+        message: isApproved ? '已通過審批' : '等待管理員審批',
+        plan: plan,
+        paymentCount: paymentCount
       });
     } else {
       // 用戶不存在，自動註冊（狀態為 Pending）
@@ -72,7 +78,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({
         approved: false,
         status: 'Pending',
-        message: '已提交註冊申請，請等待管理員審批'
+        message: '已提交註冊申請，請等待管理員審批',
+        plan: null,
+        paymentCount: 0
       });
     }
   } catch (error) {
