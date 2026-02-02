@@ -44,6 +44,51 @@ const LoginPage: React.FC = () => {
     return () => unsubscribe();
   }, [navigate]);
 
+  // 壓縮圖片函數
+  const compressImage = (file: File, maxSizeMB: number = 1): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+
+          // 計算縮放比例，確保圖片不會太大
+          const maxDimension = 1920;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = (height / width) * maxDimension;
+              width = maxDimension;
+            } else {
+              width = (width / height) * maxDimension;
+              height = maxDimension;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // 壓縮為 JPEG，質量 0.7
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(compressedBase64.split(',')[1]);
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !userEmail) return;
@@ -54,9 +99,9 @@ const LoginPage: React.FC = () => {
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError(language === 'zh-TW' ? '圖片大小不能超過 5MB' : 'Image size cannot exceed 5MB');
+    // Validate file size (max 10MB for original, will be compressed)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError(language === 'zh-TW' ? '圖片大小不能超過 10MB' : 'Image size cannot exceed 10MB');
       return;
     }
 
@@ -64,45 +109,29 @@ const LoginPage: React.FC = () => {
     setUploadError(null);
 
     try {
-      // Convert to base64
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = (reader.result as string).split(',')[1];
+      // 壓縮圖片
+      const compressedBase64 = await compressImage(file);
 
-        try {
-          // 發送到 Vercel API（由 API 轉發到 Google Apps Script）
-          const response = await fetch('/api/upload-payment-proof', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: userEmail,
-              imageData: base64,
-              fileName: file.name,
-              contentType: file.type
-            })
-          });
+      // 發送到 Vercel API（由 API 轉發到 Google Apps Script）
+      const response = await fetch('/api/upload-payment-proof', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          imageData: compressedBase64,
+          fileName: file.name.replace(/\.[^.]+$/, '.jpg'), // 改為 .jpg
+          contentType: 'image/jpeg'
+        })
+      });
 
-          const data = await response.json();
+      const data = await response.json();
 
-          if (data.success) {
-            setUploadSuccess(true);
-          } else {
-            setUploadError(data.error || data.message || (language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again'));
-          }
-          setUploading(false);
-        } catch (fetchErr) {
-          console.error('Fetch error:', fetchErr);
-          setUploadError(language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again');
-          setUploading(false);
-        }
-      };
-
-      reader.onerror = () => {
-        setUploadError(language === 'zh-TW' ? '讀取檔案失敗' : 'Failed to read file');
-        setUploading(false);
-      };
-
-      reader.readAsDataURL(file);
+      if (data.success) {
+        setUploadSuccess(true);
+      } else {
+        setUploadError(data.error || data.message || (language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again'));
+      }
+      setUploading(false);
     } catch (err) {
       console.error('Upload error:', err);
       setUploadError(language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again');
