@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase';
 import { useTranslation } from '../contexts/LanguageContext';
 import { Logo } from '../components/landing/Logo';
-import { Loader2, AlertCircle, Clock, Upload, CheckCircle, CreditCard, QrCode } from 'lucide-react';
+import { Loader2, AlertCircle, Clock, Upload, CheckCircle, CreditCard, QrCode, ArrowLeft } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const { t, language, setLanguage } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isUpgradeMode = searchParams.get('upgrade') === 'true';
+
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,10 +33,11 @@ const LoginPage: React.FC = () => {
           const response = await fetch(`/api/check-user-status?email=${encodeURIComponent(user.email || '')}`);
           const data = await response.json();
 
-          if (data.approved === true) {
+          if (data.approved === true && !isUpgradeMode) {
+            // 已通過審批且不是升級模式 → 跳轉到 app
             navigate('/app');
           } else {
-            // User is pending or new - show pending message
+            // User is pending, new, or in upgrade mode - show payment section
             setPendingApproval(true);
             setUserPlan(data.plan || null);
             setPaymentCount(data.paymentCount || 0);
@@ -203,13 +207,27 @@ const LoginPage: React.FC = () => {
             {/* Pending Approval Message with Payment Options */}
             {pendingApproval && (
               <div className="mb-6 space-y-6">
-                {/* Pending Status */}
-                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
-                  <Clock className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
-                  <p className="text-amber-200 text-sm">
-                    {t('login.pending')}
-                  </p>
-                </div>
+                {/* Status Message - different for upgrade mode */}
+                {isUpgradeMode ? (
+                  <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-start gap-3">
+                    <ArrowLeft className="w-5 h-5 text-purple-400 mt-0.5 shrink-0 cursor-pointer" onClick={() => navigate('/app')} />
+                    <div>
+                      <p className="text-purple-200 text-sm font-semibold">
+                        {language === 'zh-TW' ? '升級至 Pro 計劃' : 'Upgrade to Pro Plan'}
+                      </p>
+                      <p className="text-purple-300/70 text-xs mt-1">
+                        {language === 'zh-TW' ? '點擊左側箭頭返回應用' : 'Click arrow to return to app'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
+                    <Clock className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-amber-200 text-sm">
+                      {t('login.pending')}
+                    </p>
+                  </div>
+                )}
 
                 {/* Payment Section */}
                 <div className="p-6 rounded-xl bg-slate-800/50 border border-slate-700">
@@ -224,15 +242,12 @@ const LoginPage: React.FC = () => {
                     <p className="text-emerald-300 text-sm font-semibold text-center">
                       {(() => {
                         // 根據用戶狀態顯示不同價格
-                        // Trial (新用戶): HK$1
-                        // 首月 (Trial 到期，paymentCount === 1): HK$500
-                        // 正式 (已付過首月，paymentCount >= 2): HK$1,000
-                        if (!userPlan && paymentCount === 0) {
-                          return language === 'zh-TW' ? '💰 Trial 價格：HK$1' : '💰 Trial Price: HK$1';
-                        } else if (userPlan === 'Trial' || paymentCount === 1) {
+                        // 新用戶（無 Plan）: HK$1
+                        // Trial 用戶升級: HK$500（首月優惠）
+                        if (userPlan === 'Trial' || isUpgradeMode) {
                           return language === 'zh-TW' ? '💰 首月優惠價：HK$500' : '💰 First Month: HK$500';
                         } else {
-                          return language === 'zh-TW' ? '💰 月費：HK$1,000' : '💰 Monthly: HK$1,000';
+                          return language === 'zh-TW' ? '💰 Trial 價格：HK$1' : '💰 Trial Price: HK$1';
                         }
                       })()}
                     </p>

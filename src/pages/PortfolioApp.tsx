@@ -11,7 +11,7 @@ import ResultsDisplay from '../components/app/ResultsDisplay';
 import Toast, { ToastType } from '../components/app/Toast';
 import { StockData, PortfolioParams, OptimizationSettings, OptimizationResult, Tab, ProgressUpdate, ScatterPoint } from '../types';
 import { runOptimizationWorkers, stopOptimization } from '../services/workerHelper';
-import { Loader2, LogOut, LayoutDashboard, Settings, Play, BarChart3 } from 'lucide-react';
+import { Loader2, LogOut, LayoutDashboard, Settings, Play, BarChart3, ArrowUpCircle } from 'lucide-react';
 
 const PortfolioApp: React.FC = () => {
   const { language, setLanguage } = useTranslation();
@@ -20,6 +20,7 @@ const PortfolioApp: React.FC = () => {
   // Auth state
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [userPlan, setUserPlan] = useState<string | null>(null);
 
   // App state
   const [activeTab, setActiveTab] = useState<Tab>(Tab.Data);
@@ -56,6 +57,7 @@ const PortfolioApp: React.FC = () => {
         }
 
         setUser(currentUser);
+        setUserPlan(data.plan || null);
       } catch (err) {
         console.error('Error checking user status:', err);
         navigate('/login');
@@ -175,6 +177,26 @@ const PortfolioApp: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Plan 標籤和升級按鈕 */}
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-1 rounded text-xs font-bold ${
+                userPlan === 'Pro'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                  : 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+              }`}>
+                {userPlan || 'Trial'}
+              </span>
+              {userPlan === 'Trial' && (
+                <button
+                  onClick={() => navigate('/login?upgrade=true')}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-xs font-medium transition-colors border border-amber-500/30"
+                >
+                  <ArrowUpCircle size={14} />
+                  {language === 'zh-TW' ? '升級' : 'Upgrade'}
+                </button>
+              )}
+            </div>
+
             <button
               onClick={() => setLanguage(language === 'en' ? 'zh-TW' : 'en')}
               className="px-3 py-1.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 text-sm font-medium transition-colors"
@@ -191,7 +213,7 @@ const PortfolioApp: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm font-medium transition-colors"
             >
               <LogOut size={16} />
-              登出
+              {language === 'zh-TW' ? '登出' : 'Logout'}
             </button>
           </div>
         </div>
