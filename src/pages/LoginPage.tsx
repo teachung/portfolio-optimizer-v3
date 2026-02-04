@@ -22,6 +22,8 @@ const LoginPage: React.FC = () => {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [userPlan, setUserPlan] = useState<string | null>(null);
   const [paymentCount, setPaymentCount] = useState<number>(0);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockReason, setBlockReason] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -32,6 +34,14 @@ const LoginPage: React.FC = () => {
         try {
           const response = await fetch(`/api/check-user-status?email=${encodeURIComponent(user.email || '')}`);
           const data = await response.json();
+
+          // 檢查是否被封鎖
+          if (data.blocked) {
+            setIsBlocked(true);
+            setBlockReason(data.blockReason || '違反使用條款');
+            setCheckingAuth(false);
+            return;
+          }
 
           if (data.approved === true && !isUpgradeMode) {
             // 已通過審批且不是升級模式 → 跳轉到 app
@@ -135,11 +145,33 @@ const LoginPage: React.FC = () => {
       const data = await response.json();
 
       if (data.success) {
+        // 檢查是否被 Blacklist 封鎖
+        if (data.blocked) {
+          setIsBlocked(true);
+          setBlockReason(data.reason || '違反使用條款');
+          setUploading(false);
+          return;
+        }
+
         setUploadSuccess(true);
+        setUploading(false);
+
+        // ===== 改進：上傳成功後直接跳轉到功能頁 =====
+        // 顯示成功訊息 2 秒後跳轉
+        setTimeout(() => {
+          navigate('/app');
+        }, 2000);
+
       } else {
-        setUploadError(data.error || data.message || (language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again'));
+        // 檢查是否因為 Blacklist 被拒絕
+        if (data.blocked) {
+          setIsBlocked(true);
+          setBlockReason(data.reason || '違反使用條款');
+        } else {
+          setUploadError(data.error || data.message || (language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again'));
+        }
+        setUploading(false);
       }
-      setUploading(false);
     } catch (err) {
       console.error('Upload error:', err);
       setUploadError(language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again');
@@ -167,6 +199,52 @@ const LoginPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#0B1120] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+      </div>
+    );
+  }
+
+  // ===== 新增：顯示被封鎖的訊息 =====
+  if (isBlocked) {
+    return (
+      <div className="min-h-screen bg-[#0B1120] flex flex-col">
+        {/* Header */}
+        <header className="p-4 flex justify-between items-center">
+          <a href="/" className="flex items-center gap-2">
+            <Logo />
+            <span className="text-xl font-bold text-white">PortfolioBlender</span>
+          </a>
+        </header>
+
+        {/* Blocked Message */}
+        <main className="flex-1 flex items-center justify-center p-4">
+          <div className="w-full max-w-md">
+            <div className="bg-slate-900/50 border border-red-500/30 rounded-2xl p-8 backdrop-blur-sm text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+                <AlertCircle className="w-8 h-8 text-red-400" />
+              </div>
+              <h1 className="text-2xl font-bold text-white mb-2">
+                {language === 'zh-TW' ? '帳戶已被停用' : 'Account Suspended'}
+              </h1>
+              <p className="text-slate-400 mb-4">
+                {language === 'zh-TW' ? '您的帳戶因以下原因被停用：' : 'Your account has been suspended for:'}
+              </p>
+              <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 mb-6">
+                <p className="text-red-300">{blockReason}</p>
+              </div>
+              <p className="text-slate-500 text-sm">
+                {language === 'zh-TW'
+                  ? '如有疑問，請聯繫客服。'
+                  : 'If you have questions, please contact support.'}
+              </p>
+              <a
+                href="/"
+                className="inline-block mt-6 text-slate-400 hover:text-emerald-400 text-sm transition-colors"
+              >
+                ← {language === 'zh-TW' ? '返回首頁' : 'Back to Home'}
+              </a>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -323,13 +401,21 @@ const LoginPage: React.FC = () => {
                     />
 
                     {uploadSuccess ? (
-                      <div className="flex items-center gap-2 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                        <CheckCircle className="w-5 h-5 text-emerald-400" />
-                        <span className="text-emerald-300 text-sm">
+                      <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-emerald-400" />
+                          <span className="text-emerald-300 text-sm font-semibold">
+                            {language === 'zh-TW'
+                              ? '付款證明已上傳！'
+                              : 'Payment proof uploaded!'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-emerald-300/70 text-xs">
+                          <Loader2 className="w-4 h-4 animate-spin" />
                           {language === 'zh-TW'
-                            ? '付款證明已上傳！我們會在 1-2 個工作天內審核。'
-                            : 'Payment proof uploaded! We will review within 1-2 business days.'}
-                        </span>
+                            ? '正在跳轉到功能頁...'
+                            : 'Redirecting to app...'}
+                        </div>
                       </div>
                     ) : (
                       <>
