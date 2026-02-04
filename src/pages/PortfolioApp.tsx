@@ -273,6 +273,8 @@ const PortfolioApp: React.FC = () => {
             result={result}
             settings={settings}
             stockData={stockData}
+            userPlan={userPlan}
+            language={language}
           />
         )}
       </main>

@@ -4,6 +4,7 @@ import { Chart, registerables, Plugin, InteractionItem } from 'chart.js';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { OptimizationResult, OptimizationSettings, StockData, ScatterPoint, Metrics, StockMetrics, MonthlyReturn } from '../../types';
 import { calculatePortfolioPerformance, calculateMonthlyReturns, calculateAssetRotation, calculateCurrentCyclePositions, sliceStockData, calculateMetrics } from '../../services/portfolioCalculator';
+import AIAnalysisSection from './AIAnalysisSection';
 
 Chart.register(...registerables, zoomPlugin);
 
@@ -11,6 +12,8 @@ interface ResultsDisplayProps {
   result: OptimizationResult | null;
   settings: OptimizationSettings | null;
   stockData: StockData | null;
+  userPlan?: string | null;
+  language?: string;
 }
 
 interface DisplayPortfolio {
@@ -833,7 +836,7 @@ const AssetRotationChart: React.FC<{ weights: Record<string, number>, stockData:
     return <div className="h-96"><canvas ref={chartRef}></canvas></div>;
 };
 
-const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, settings, stockData }) => {
+const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, settings, stockData, userPlan = null, language = 'zh-TW' }) => {
     const performanceChartRef = useRef<HTMLCanvasElement>(null);
     const drawdownChartRef = useRef<HTMLCanvasElement>(null);
     const scatterChartRef = useRef<HTMLCanvasElement>(null);
@@ -1457,7 +1460,16 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ result, settings, stock
                     </div>
                 </div>
              </div>
-             
+
+             {/* AI Analysis Section */}
+             {result && (
+               <AIAnalysisSection
+                 result={result}
+                 userPlan={userPlan}
+                 language={language}
+               />
+             )}
+
              {/* Period Optimization Panel */}
              <div className="bg-gray-800 p-6 rounded-xl border border-yellow-600/30 shadow-lg">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
