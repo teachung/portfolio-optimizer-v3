@@ -1,8 +1,27 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import * as admin from 'firebase-admin';
+
+// Initialize Firebase Admin (only once)
+if (!admin.apps.length) {
+  const serviceAccount = {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  };
+
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+  });
+}
+
+const db = admin.firestore();
 
 // Poe API Configuration
 const POE_API_URL = 'https://api.poe.com/v1/chat/completions';
-const POE_MODEL = 'web-search'; // 使用 web-search 以獲取最新資料
+const POE_MODEL = 'web-search';
+
+// Monthly usage limit
+const MONTHLY_AI_LIMIT = 30;
 
 interface PortfolioData {
   weights: Record<string, number>;
@@ -18,6 +37,143 @@ interface PortfolioData {
   };
   query?: string;
   language?: string;
+}
+
+interface UserData {
+  email: string;
+  plan: string;
+  status: boolean;
+  aiUsageCount: number;
+  aiUsageResetDate: string;
+}
+
+// Helper: Convert email to Firestore document ID
+function emailToDocId(email: string): string {
+  return email.replace(/@/g, '_at_').replace(/\./g, '_dot_');
+}
+
+// Verify Firebase ID Token
+async function verifyToken(authHeader: string | undefined): Promise<{ valid: boolean; email?: string; error?: string }> {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return { valid: false, error: '未提供認證 Token' };
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    return { valid: true, email: decodedToken.email };
+  } catch (error) {
+    console.error('Token verification failed:', error);
+    return { valid: false, error: 'Token 無效或已過期' };
+  }
+}
+
+// Check user access from Firestore
+async function checkUserAccess(email: string): Promise<{
+  allowed: boolean;
+  isPro: boolean;
+  usageCount: number;
+  remainingUsage: number;
+  error?: string;
+}> {
+  try {
+    // Check blacklist first
+    const blacklistDoc = await db.collection('blacklist').doc(emailToDocId(email)).get();
+    if (blacklistDoc.exists) {
+      return {
+        allowed: false,
+        isPro: false,
+        usageCount: 0,
+        remainingUsage: 0,
+        error: '此帳號已被停用'
+      };
+    }
+
+    // Get user document
+    const userDoc = await db.collection('users').doc(emailToDocId(email)).get();
+
+    if (!userDoc.exists) {
+      return {
+        allowed: false,
+        isPro: false,
+        usageCount: 0,
+        remainingUsage: 0,
+        error: '用戶不存在'
+      };
+    }
+
+    const userData = userDoc.data() as UserData;
+
+    // Check if Pro user
+    if (userData.plan !== 'Pro') {
+      return {
+        allowed: false,
+        isPro: false,
+        usageCount: 0,
+        remainingUsage: 0,
+        error: 'AI 分析是 Pro 專屬功能'
+      };
+    }
+
+    // Check usage count
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const resetDate = userData.aiUsageResetDate || '';
+    const resetMonth = resetDate ? resetDate.substring(0, 7) : '';
+
+    let usageCount = userData.aiUsageCount || 0;
+
+    // Reset count if it's a new month
+    if (resetMonth !== currentMonth) {
+      usageCount = 0;
+      // Update the reset date in Firestore
+      await db.collection('users').doc(emailToDocId(email)).update({
+        aiUsageCount: 0,
+        aiUsageResetDate: now.toISOString().split('T')[0],
+      });
+    }
+
+    const remainingUsage = Math.max(0, MONTHLY_AI_LIMIT - usageCount);
+
+    if (usageCount >= MONTHLY_AI_LIMIT) {
+      return {
+        allowed: false,
+        isPro: true,
+        usageCount,
+        remainingUsage: 0,
+        error: `本月 AI 使用次數已達上限 (${MONTHLY_AI_LIMIT} 次)`,
+      };
+    }
+
+    return { allowed: true, isPro: true, usageCount, remainingUsage };
+
+  } catch (error) {
+    console.error('Error checking user access:', error);
+    return {
+      allowed: false,
+      isPro: false,
+      usageCount: 0,
+      remainingUsage: 0,
+      error: 'Internal error'
+    };
+  }
+}
+
+// Update usage count in Firestore
+async function updateUsageCount(email: string, newCount: number): Promise<void> {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+
+  try {
+    await db.collection('users').doc(emailToDocId(email)).update({
+      aiUsageCount: newCount,
+      aiUsageResetDate: todayStr,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error updating usage count:', error);
+  }
 }
 
 // 生成系統提示詞
@@ -79,10 +235,9 @@ function generateSystemPrompt(language: string): string {
 
 // 格式化投資組合數據
 function formatPortfolioData(data: PortfolioData): string {
-  // 按權重排序
   const sortedWeights = Object.entries(data.weights)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 15) // 取前15大持倉
+    .slice(0, 15)
     .map(([ticker, weight]) => `${ticker}: ${(weight * 100).toFixed(2)}%`)
     .join('\n');
 
@@ -109,9 +264,10 @@ ${metricsText}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -121,6 +277,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Step 1: Verify Firebase Token
+  const tokenResult = await verifyToken(req.headers.authorization);
+  if (!tokenResult.valid || !tokenResult.email) {
+    return res.status(401).json({
+      error: tokenResult.error || '認證失敗',
+      code: 'AUTH_FAILED',
+    });
+  }
+
+  const userEmail = tokenResult.email;
+  console.log(`AI request from verified user: ${userEmail}`);
+
+  // Step 2: Check User Plan and Usage Limit (from Firestore)
+  const accessResult = await checkUserAccess(userEmail);
+  if (!accessResult.allowed) {
+    return res.status(403).json({
+      error: accessResult.error || '無權限使用此功能',
+      code: accessResult.isPro ? 'USAGE_LIMIT_EXCEEDED' : 'NOT_PRO_USER',
+      usageCount: accessResult.usageCount,
+      remainingUsage: accessResult.remainingUsage,
+      limit: MONTHLY_AI_LIMIT,
+    });
+  }
+
+  // Step 3: Process AI Request
   const POE_API_KEY = process.env.POE_API_KEY;
   if (!POE_API_KEY) {
     console.error('POE_API_KEY not configured');
@@ -168,24 +349,29 @@ ${portfolioSummary}
       console.error('Poe API error:', response.status, errorText);
       return res.status(response.status).json({
         error: 'AI service error',
-        details: errorText
       });
     }
 
     const data = await response.json();
     const aiResponse = data.choices?.[0]?.message?.content || 'No response from AI';
 
+    // Step 4: Update Usage Count in Firestore
+    const newUsageCount = accessResult.usageCount + 1;
+    await updateUsageCount(userEmail, newUsageCount);
+
     return res.status(200).json({
       success: true,
       analysis: aiResponse,
       model: POE_MODEL,
+      usageCount: newUsageCount,
+      remainingUsage: MONTHLY_AI_LIMIT - newUsageCount,
+      limit: MONTHLY_AI_LIMIT,
     });
 
   } catch (error) {
     console.error('AI analysis error:', error);
     return res.status(500).json({
       error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 }
