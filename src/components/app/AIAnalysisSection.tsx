@@ -16,6 +16,7 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [usageInfo, setUsageInfo] = useState<{ used: number; remaining: number; limit: number } | null>(null);
 
   const isPro = userPlan === 'Pro';
 
@@ -65,6 +66,14 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
       }
 
       setAnalysis(data.analysis);
+      // 更新使用次數資訊
+      if (data.usageCount !== undefined) {
+        setUsageInfo({
+          used: data.usageCount,
+          remaining: data.remainingUsage,
+          limit: data.limit,
+        });
+      }
     } catch (err) {
       console.error('AI analysis error:', err);
       setError(err instanceof Error ? err.message : 'Analysis failed');
@@ -133,13 +142,26 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
             // Pro User - Show AI interface
             <div className="space-y-4">
               {/* Status indicator */}
-              <div className="flex items-center gap-2 text-sm">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                <span className="text-gray-400">
-                  {language === 'zh-TW'
-                    ? '已連接雲端 AI (Web Search) - 可獲取最新資料'
-                    : 'Connected to Cloud AI (Web Search) - Can fetch latest data'}
-                </span>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                  <span className="text-gray-400">
+                    {language === 'zh-TW'
+                      ? '已連接雲端 AI (Web Search) - 可獲取最新資料'
+                      : 'Connected to Cloud AI (Web Search) - Can fetch latest data'}
+                  </span>
+                </div>
+                {/* 使用次數顯示 */}
+                {usageInfo && (
+                  <div className="flex items-center gap-2 px-3 py-1 bg-purple-500/20 rounded-full">
+                    <Sparkles className="w-3 h-3 text-purple-400" />
+                    <span className="text-purple-300 text-xs font-medium">
+                      {language === 'zh-TW'
+                        ? `本月已用 ${usageInfo.used}/${usageInfo.limit} 次`
+                        : `Used ${usageInfo.used}/${usageInfo.limit} this month`}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Input area */}
