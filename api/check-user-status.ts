@@ -34,14 +34,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
   const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST') {
+  // Accept both GET and POST
+  if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -49,7 +50,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Initialize Firebase
     await initFirebase();
 
-    const { email } = req.body;
+    // Get email from query (GET) or body (POST)
+    const email = req.method === 'GET'
+      ? req.query.email as string
+      : req.body?.email;
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
