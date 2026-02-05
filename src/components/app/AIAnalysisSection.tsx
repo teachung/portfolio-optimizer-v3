@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Bot, Send, Loader2, ChevronDown, ChevronUp, Lock, Sparkles, AlertCircle } from 'lucide-react';
 import { OptimizationResult } from '../../types';
-import { getAuth } from 'firebase/auth';
+import { auth } from '../../firebase';
 
 interface AIAnalysisSectionProps {
   result: OptimizationResult;
@@ -10,74 +10,41 @@ interface AIAnalysisSectionProps {
   language: string;
 }
 
+const MONTHLY_AI_LIMIT = 30;
+
 const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan, language }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [usageInfo, setUsageInfo] = useState<{ used: number; remaining: number; limit: number } | null>(null);
-  const [loadingUsage, setLoadingUsage] = useState(false);
+  const [usageInfo, setUsageInfo] = useState<{ usageCount: number; remainingUsage: number } | null>(null);
 
-  const isPro = userPlan === 'Pro';
-
-  // 載入時取得 AI 使用次數
-  useEffect(() => {
-    if (isPro) {
-      fetchUsageInfo();
-    }
-  }, [isPro]);
-
-  const fetchUsageInfo = async () => {
-    try {
-      setLoadingUsage(true);
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const token = await user.getIdToken();
-      const response = await fetch('/api/ai-usage', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUsageInfo({
-          used: data.usageCount,
-          remaining: data.remainingUsage,
-          limit: data.limit,
-        });
-      }
-    } catch (err) {
-      console.error('Failed to fetch usage info:', err);
-    } finally {
-      setLoadingUsage(false);
-    }
-  };
+  // FirstMonth 和 Pro 都有 AI 功能
+  const hasAIAccess = userPlan === 'FirstMonth' || userPlan === 'Pro';
 
   const handleAnalyze = async () => {
-    if (!isPro) return;
+    if (!hasAIAccess) return;
 
     setIsLoading(true);
     setError(null);
     setAnalysis(null);
 
     try {
-      // Get Firebase Auth Token
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('請先登入');
+      // ===== Get Firebase ID Token =====
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error(language === 'zh-TW' ? '請先登入' : 'Please login first');
       }
-      const token = await user.getIdToken();
 
+      const idToken = await currentUser.getIdToken(true); // Force refresh token
+
+      // ===== Call API with Token =====
       const response = await fetch('/api/ai-analysis', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,  // 加入 Firebase Token
+          'Authorization': `Bearer ${idToken}`, // Send token in header
         },
         body: JSON.stringify({
           weights: result.weights,
@@ -99,16 +66,24 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
       const data = await response.json();
 
       if (!response.ok) {
+        // Handle specific error codes
+        if (data.code === 'USAGE_LIMIT_EXCEEDED') {
+          throw new Error(
+            language === 'zh-TW'
+              ? `本月 AI 使用次數已達上限 (${data.limit} 次)`
+              : `Monthly AI usage limit reached (${data.limit} times)`
+          );
+        }
         throw new Error(data.error || 'Failed to get AI analysis');
       }
 
       setAnalysis(data.analysis);
-      // 更新使用次數資訊
+
+      // Update usage info
       if (data.usageCount !== undefined) {
         setUsageInfo({
-          used: data.usageCount,
-          remaining: data.remainingUsage,
-          limit: data.limit,
+          usageCount: data.usageCount,
+          remainingUsage: data.remainingUsage,
         });
       }
     } catch (err) {
@@ -138,10 +113,10 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
           <span className="text-lg font-semibold text-gray-100">
             AI 組合戰略分析 (Portfolio Analyst)
           </span>
-          {!isPro && (
+          {!hasAIAccess && (
             <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-xs font-medium">
               <Lock size={12} />
-              Pro
+              {language === 'zh-TW' ? '付費' : 'Paid'}
             </span>
           )}
         </div>
@@ -155,32 +130,32 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
       {/* Expanded Content */}
       {isExpanded && (
         <div className="border-t border-gray-700 p-4">
-          {!isPro ? (
+          {!hasAIAccess ? (
             // Trial User - Show upgrade prompt
             <div className="text-center py-8">
               <Lock className="w-12 h-12 text-gray-500 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-300 mb-2">
-                {language === 'zh-TW' ? 'Pro 專屬功能' : 'Pro Feature'}
+                {language === 'zh-TW' ? '付費專屬功能' : 'Paid Feature'}
               </h3>
               <p className="text-gray-400 mb-4">
                 {language === 'zh-TW'
-                  ? 'AI 組合分析是 Pro 用戶專屬功能。升級後可獲得專業的投資組合深度分析報告。'
-                  : 'AI Portfolio Analysis is a Pro-exclusive feature. Upgrade to get professional portfolio analysis reports.'}
+                  ? 'AI 組合分析是 FirstMonth / Pro 用戶專屬功能。訂閱後可獲得專業的投資組合深度分析報告。'
+                  : 'AI Portfolio Analysis is a FirstMonth/Pro exclusive feature. Subscribe to get professional portfolio analysis reports.'}
               </p>
               <a
                 href="/login?upgrade=true"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-500 hover:bg-purple-600 text-white font-medium transition-colors"
               >
                 <Sparkles size={16} />
-                {language === 'zh-TW' ? '升級至 Pro' : 'Upgrade to Pro'}
+                {language === 'zh-TW' ? '訂閱方案' : 'Subscribe'}
               </a>
             </div>
           ) : (
             // Pro User - Show AI interface
             <div className="space-y-4">
-              {/* Status indicator */}
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
+              {/* Status indicator with usage info */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
                   <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
                   <span className="text-gray-400">
                     {language === 'zh-TW'
@@ -188,22 +163,22 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
                       : 'Connected to Cloud AI (Web Search) - Can fetch latest data'}
                   </span>
                 </div>
-                {/* 使用次數顯示 */}
-                {loadingUsage ? (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-gray-600/30 rounded-full">
-                    <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />
-                    <span className="text-gray-400 text-xs">載入中...</span>
-                  </div>
-                ) : usageInfo ? (
-                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${usageInfo.remaining <= 5 ? 'bg-amber-500/20' : 'bg-purple-500/20'}`}>
-                    <Sparkles className={`w-3 h-3 ${usageInfo.remaining <= 5 ? 'text-amber-400' : 'text-purple-400'}`} />
-                    <span className={`text-xs font-medium ${usageInfo.remaining <= 5 ? 'text-amber-300' : 'text-purple-300'}`}>
+                {/* Usage counter */}
+                <div className="text-sm text-gray-400">
+                  {usageInfo ? (
+                    <span className={usageInfo.remainingUsage <= 5 ? 'text-amber-400' : ''}>
                       {language === 'zh-TW'
-                        ? `本月剩餘 ${usageInfo.remaining}/${usageInfo.limit} 次`
-                        : `${usageInfo.remaining}/${usageInfo.limit} remaining this month`}
+                        ? `本月剩餘: ${usageInfo.remainingUsage}/${MONTHLY_AI_LIMIT} 次`
+                        : `Remaining: ${usageInfo.remainingUsage}/${MONTHLY_AI_LIMIT}`}
                     </span>
-                  </div>
-                ) : null}
+                  ) : (
+                    <span>
+                      {language === 'zh-TW'
+                        ? `每月上限: ${MONTHLY_AI_LIMIT} 次`
+                        : `Monthly limit: ${MONTHLY_AI_LIMIT}`}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Input area */}
