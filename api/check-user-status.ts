@@ -30,6 +30,22 @@ function emailToDocId(email: string): string {
   return email.replace(/@/g, '_at_').replace(/\./g, '_dot_');
 }
 
+// Helper: Check if plan has expired
+function isPlanExpired(planEndDate: string | null | undefined): boolean {
+  if (!planEndDate) return false;  // 沒有結束日期 = 不會過期
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);  // 只比較日期，不比較時間
+
+  const endDate = new Date(planEndDate);
+  endDate.setHours(0, 0, 0, 0);
+
+  return today > endDate;  // 今天 > 結束日期 = 已過期
+}
+
+// Plans that have expiration (Trial, FirstMonth)
+const EXPIRING_PLANS = ['Trial', 'FirstMonth'];
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
   const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
@@ -106,6 +122,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // User exists
     const userData = userDoc.data();
+    let currentPlan = userData?.plan || null;
+    let planExpired = false;
+
+    // Step 3: Check if plan has expired (for Trial and FirstMonth)
+    if (currentPlan && EXPIRING_PLANS.includes(currentPlan)) {
+      const planEndDate = userData?.planEndDate;
+
+      if (isPlanExpired(planEndDate)) {
+        // Plan has expired - auto change to 'Expired'
+        console.log(`Plan expired for user ${email}: ${currentPlan} -> Expired (was valid until ${planEndDate})`);
+
+        await db.collection('users').doc(docId).update({
+          plan: 'Expired',
+          previousPlan: currentPlan,  // 記錄之前的方案
+          expiredAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        currentPlan = 'Expired';
+        planExpired = true;
+      }
+    }
 
     // Update last login time
     await db.collection('users').doc(docId).update({
@@ -115,10 +153,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       exists: true,
       isBlocked: false,
-      plan: userData?.plan || 'Trial',
+      plan: currentPlan,
       status: userData?.status !== false,
       payerId: userData?.payerId || null,
       approved: userData?.status !== false,  // 前端需要這個欄位來判斷是否跳轉到 app
+      planStartDate: userData?.planStartDate || null,
+      planEndDate: userData?.planEndDate || null,
+      planExpired: planExpired,  // 讓前端知道剛剛過期了
     });
 
   } catch (error) {
