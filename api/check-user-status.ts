@@ -78,11 +78,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userDoc = await db.collection('users').doc(docId).get();
 
     if (!userDoc.exists) {
-      // User doesn't exist - create new Trial user
+      // User doesn't exist - create new user (pending approval)
       const newUser = {
         email: email,
-        plan: 'Trial',
-        status: true,
+        plan: null,  // 未付款，沒有 plan
+        status: false,  // 未審批
         payerId: null,
         aiUsageCount: 0,
         aiUsageResetDate: new Date().toISOString().split('T')[0],
@@ -92,15 +92,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       await db.collection('users').doc(docId).set(newUser);
 
-      console.log(`New user created: ${email}`);
+      console.log(`New user created (pending): ${email}`);
 
       return res.status(200).json({
         exists: false,
         isBlocked: false,
-        plan: 'Trial',
-        status: true,
+        plan: null,
+        status: false,
         isNewUser: true,
-        approved: true,  // 新用戶也需要 approved 欄位
+        approved: false,  // 新用戶需要先付款，approved = false
       });
     }
 
