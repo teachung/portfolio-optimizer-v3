@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Bot, Send, Loader2, ChevronDown, ChevronUp, Lock, Sparkles, AlertCircle } from 'lucide-react';
 import { OptimizationResult } from '../../types';
+import { getAuth } from 'firebase/auth';
 
 interface AIAnalysisSectionProps {
   result: OptimizationResult;
@@ -26,10 +27,19 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
     setAnalysis(null);
 
     try {
+      // Get Firebase Auth Token
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('請先登入');
+      }
+      const token = await user.getIdToken();
+
       const response = await fetch('/api/ai-analysis', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,  // 加入 Firebase Token
         },
         body: JSON.stringify({
           weights: result.weights,
