@@ -1,20 +1,29 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import * as admin from 'firebase-admin';
 
-// Initialize Firebase Admin (only once)
-if (!admin.apps.length) {
-  const serviceAccount = {
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  };
+// Dynamic import for firebase-admin (same fix as check-user-status)
+let admin: any = null;
+let db: any = null;
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
-  });
+async function initFirebase() {
+  if (admin && db) return;
+
+  const firebaseAdmin = await import('firebase-admin');
+  admin = firebaseAdmin.default || firebaseAdmin;
+
+  if (!admin.apps || admin.apps.length === 0) {
+    const serviceAccount = {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    };
+
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  }
+
+  db = admin.firestore();
 }
-
-const db = admin.firestore();
 
 // Poe API Configuration
 const POE_API_URL = 'https://api.poe.com/v1/chat/completions';
@@ -277,38 +286,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Step 1: Verify Firebase Token
-  const tokenResult = await verifyToken(req.headers.authorization);
-  if (!tokenResult.valid || !tokenResult.email) {
-    return res.status(401).json({
-      error: tokenResult.error || '認證失敗',
-      code: 'AUTH_FAILED',
-    });
-  }
-
-  const userEmail = tokenResult.email;
-  console.log(`AI request from verified user: ${userEmail}`);
-
-  // Step 2: Check User Plan and Usage Limit (from Firestore)
-  const accessResult = await checkUserAccess(userEmail);
-  if (!accessResult.allowed) {
-    return res.status(403).json({
-      error: accessResult.error || '無權限使用此功能',
-      code: accessResult.isPro ? 'USAGE_LIMIT_EXCEEDED' : 'NOT_PRO_USER',
-      usageCount: accessResult.usageCount,
-      remainingUsage: accessResult.remainingUsage,
-      limit: MONTHLY_AI_LIMIT,
-    });
-  }
-
-  // Step 3: Process AI Request
-  const POE_API_KEY = process.env.POE_API_KEY;
-  if (!POE_API_KEY) {
-    console.error('POE_API_KEY not configured');
-    return res.status(500).json({ error: 'AI service not configured' });
-  }
-
   try {
+    // Initialize Firebase (dynamic import)
+    await initFirebase();
+
+    // Step 1: Verify Firebase Token
+    const tokenResult = await verifyToken(req.headers.authorization);
+    if (!tokenResult.valid || !tokenResult.email) {
+      return res.status(401).json({
+        error: tokenResult.error || '認證失敗',
+        code: 'AUTH_FAILED',
+      });
+    }
+
+    const userEmail = tokenResult.email;
+    console.log(`AI request from verified user: ${userEmail}`);
+
+    // Step 2: Check User Plan and Usage Limit (from Firestore)
+    const accessResult = await checkUserAccess(userEmail);
+    if (!accessResult.allowed) {
+      return res.status(403).json({
+        error: accessResult.error || '無權限使用此功能',
+        code: accessResult.isPro ? 'USAGE_LIMIT_EXCEEDED' : 'NOT_PRO_USER',
+        usageCount: accessResult.usageCount,
+        remainingUsage: accessResult.remainingUsage,
+        limit: MONTHLY_AI_LIMIT,
+      });
+    }
+
+    // Step 3: Process AI Request
+    const POE_API_KEY = process.env.POE_API_KEY;
+    if (!POE_API_KEY) {
+      console.error('POE_API_KEY not configured');
+      return res.status(500).json({ error: 'AI service not configured' });
+    }
+
     const { weights, metrics, query, language = 'zh-TW' } = req.body as PortfolioData;
 
     if (!weights || !metrics) {
@@ -372,6 +384,7 @@ ${portfolioSummary}
     console.error('AI analysis error:', error);
     return res.status(500).json({
       error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 }
