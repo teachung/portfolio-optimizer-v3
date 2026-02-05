@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Bot, Send, Loader2, ChevronDown, ChevronUp, Lock, Sparkles, AlertCircle } from 'lucide-react';
 import { OptimizationResult } from '../../types';
@@ -17,8 +17,45 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [usageInfo, setUsageInfo] = useState<{ used: number; remaining: number; limit: number } | null>(null);
+  const [loadingUsage, setLoadingUsage] = useState(false);
 
   const isPro = userPlan === 'Pro';
+
+  // 載入時取得 AI 使用次數
+  useEffect(() => {
+    if (isPro) {
+      fetchUsageInfo();
+    }
+  }, [isPro]);
+
+  const fetchUsageInfo = async () => {
+    try {
+      setLoadingUsage(true);
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const token = await user.getIdToken();
+      const response = await fetch('/api/ai-usage', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUsageInfo({
+          used: data.usageCount,
+          remaining: data.remainingUsage,
+          limit: data.limit,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch usage info:', err);
+    } finally {
+      setLoadingUsage(false);
+    }
+  };
 
   const handleAnalyze = async () => {
     if (!isPro) return;
@@ -152,16 +189,21 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
                   </span>
                 </div>
                 {/* 使用次數顯示 */}
-                {usageInfo && (
-                  <div className="flex items-center gap-2 px-3 py-1 bg-purple-500/20 rounded-full">
-                    <Sparkles className="w-3 h-3 text-purple-400" />
-                    <span className="text-purple-300 text-xs font-medium">
+                {loadingUsage ? (
+                  <div className="flex items-center gap-2 px-3 py-1 bg-gray-600/30 rounded-full">
+                    <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />
+                    <span className="text-gray-400 text-xs">載入中...</span>
+                  </div>
+                ) : usageInfo ? (
+                  <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${usageInfo.remaining <= 5 ? 'bg-amber-500/20' : 'bg-purple-500/20'}`}>
+                    <Sparkles className={`w-3 h-3 ${usageInfo.remaining <= 5 ? 'text-amber-400' : 'text-purple-400'}`} />
+                    <span className={`text-xs font-medium ${usageInfo.remaining <= 5 ? 'text-amber-300' : 'text-purple-300'}`}>
                       {language === 'zh-TW'
-                        ? `本月已用 ${usageInfo.used}/${usageInfo.limit} 次`
-                        : `Used ${usageInfo.used}/${usageInfo.limit} this month`}
+                        ? `本月剩餘 ${usageInfo.remaining}/${usageInfo.limit} 次`
+                        : `${usageInfo.remaining}/${usageInfo.limit} remaining this month`}
                     </span>
                   </div>
-                )}
+                ) : null}
               </div>
 
               {/* Input area */}
