@@ -93,14 +93,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userData = userDoc.data();
 
-    // Check if Pro user
-    if (userData?.plan !== 'Pro') {
+    // Check if user has AI access (FirstMonth or Pro)
+    const plansWithAI = ['FirstMonth', 'Pro'];
+    if (!plansWithAI.includes(userData?.plan)) {
       return res.status(200).json({
         usageCount: 0,
         remainingUsage: 0,
         limit: MONTHLY_AI_LIMIT,
-        isPro: false,
-        message: 'AI 分析是 Pro 專屬功能',
+        hasAIAccess: false,
+        message: 'AI 分析是 FirstMonth / Pro 專屬功能',
       });
     }
 
@@ -128,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       usageCount,
       remainingUsage,
       limit: MONTHLY_AI_LIMIT,
-      isPro: true,
+      hasAIAccess: true,
     });
 
   } catch (error) {

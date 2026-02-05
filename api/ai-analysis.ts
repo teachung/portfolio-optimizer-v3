@@ -114,14 +114,15 @@ async function checkUserAccess(email: string): Promise<{
 
     const userData = userDoc.data() as UserData;
 
-    // Check if Pro user
-    if (userData.plan !== 'Pro') {
+    // Check if user has AI access (FirstMonth or Pro)
+    const plansWithAI = ['FirstMonth', 'Pro'];
+    if (!plansWithAI.includes(userData.plan)) {
       return {
         allowed: false,
         isPro: false,
         usageCount: 0,
         remainingUsage: 0,
-        error: 'AI 分析是 Pro 專屬功能'
+        error: 'AI 分析是 FirstMonth / Pro 專屬功能'
       };
     }
 
