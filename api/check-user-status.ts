@@ -100,6 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         plan: 'Trial',
         status: true,
         isNewUser: true,
+        approved: true,  // 新用戶也需要 approved 欄位
       });
     }
 
@@ -117,6 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       plan: userData?.plan || 'Trial',
       status: userData?.status !== false,
       payerId: userData?.payerId || null,
+      approved: userData?.status !== false,  // 前端需要這個欄位來判斷是否跳轉到 app
     });
 
   } catch (error) {
