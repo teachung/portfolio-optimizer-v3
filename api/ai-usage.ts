@@ -93,8 +93,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userData = userDoc.data();
 
-    // Check if user has AI access (FirstMonth or Pro)
-    const plansWithAI = ['FirstMonth', 'Pro'];
+    // Check if user has AI access (FirstMonth, Pro, or Admin)
+    const plansWithAI = ['FirstMonth', 'Pro', 'Admin'];
     if (!plansWithAI.includes(userData?.plan)) {
       return res.status(200).json({
         usageCount: 0,

@@ -20,8 +20,8 @@ const AIAnalysisSection: React.FC<AIAnalysisSectionProps> = ({ result, userPlan,
   const [error, setError] = useState<string | null>(null);
   const [usageInfo, setUsageInfo] = useState<{ usageCount: number; remainingUsage: number } | null>(null);
 
-  // FirstMonth 和 Pro 都有 AI 功能
-  const hasAIAccess = userPlan === 'FirstMonth' || userPlan === 'Pro';
+  // FirstMonth、Pro 和 Admin 都有 AI 功能
+  const hasAIAccess = userPlan === 'FirstMonth' || userPlan === 'Pro' || userPlan === 'Admin';
 
   const handleAnalyze = async () => {
     if (!hasAIAccess) return;

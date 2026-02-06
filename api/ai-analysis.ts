@@ -27,7 +27,8 @@ async function initFirebase() {
 
 // Poe API Configuration
 const POE_API_URL = 'https://api.poe.com/v1/chat/completions';
-const POE_MODEL = 'web-search';
+// 使用 GPT-4o 並開啟 web_search
+const POE_MODEL = 'GPT-4o';
 
 // Monthly usage limit
 const MONTHLY_AI_LIMIT = 30;
@@ -114,8 +115,8 @@ async function checkUserAccess(email: string): Promise<{
 
     const userData = userDoc.data() as UserData;
 
-    // Check if user has AI access (FirstMonth or Pro)
-    const plansWithAI = ['FirstMonth', 'Pro'];
+    // Check if user has AI access (FirstMonth, Pro, or Admin)
+    const plansWithAI = ['FirstMonth', 'Pro', 'Admin'];
     if (!plansWithAI.includes(userData.plan)) {
       return {
         allowed: false,
@@ -354,6 +355,8 @@ ${portfolioSummary}
         ],
         temperature: 0.7,
         max_tokens: 4096,
+        // 開啟 Web Search 功能，讓 AI 可以搜索最新資料
+        web_search: true,
       }),
     });
 
