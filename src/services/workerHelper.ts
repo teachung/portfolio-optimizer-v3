@@ -1340,7 +1340,7 @@ export const runOptimizationWorkers = (
     let completedWorkers = 0;
     let totalSimCount = 0;
     let totalValidCount = 0;
-    let globalBestScore = settings.optimizeTarget.includes('min_dd') ? Infinity : -Infinity;
+    let globalBestScore = (settings.optimizeTarget.includes('min_dd') || settings.optimizeTarget.startsWith('target_return')) ? Infinity : -Infinity;
     let globalBestPortfolio: any = null;
 
     isOptimizing = true;
