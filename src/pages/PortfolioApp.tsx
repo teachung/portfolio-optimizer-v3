@@ -244,21 +244,23 @@ const PortfolioApp: React.FC = () => {
         </div>
       </nav>
 
-      {/* Main Content */}
+      {/* Main Content - 使用 display:none 保留組件狀態，避免參數重設 */}
       <main className="max-w-7xl mx-auto px-4 py-6">
-        {activeTab === Tab.Data && (
+        <div style={{ display: activeTab === Tab.Data ? 'block' : 'none' }}>
           <DataInput onDataParsed={handleDataParsed} />
-        )}
+        </div>
 
-        {activeTab === Tab.Params && stockData && params && (
-          <ParamsSettings
-            initialParams={params}
-            stockTickers={stockData.tickers}
-            onStart={handleStartOptimization}
-          />
-        )}
+        <div style={{ display: activeTab === Tab.Params ? 'block' : 'none' }}>
+          {stockData && params && (
+            <ParamsSettings
+              initialParams={params}
+              stockTickers={stockData.tickers}
+              onStart={handleStartOptimization}
+            />
+          )}
+        </div>
 
-        {activeTab === Tab.Optimize && (
+        <div style={{ display: activeTab === Tab.Optimize ? 'block' : 'none' }}>
           <RunOptimization
             isRunning={isRunning}
             progress={progress}
@@ -266,7 +268,7 @@ const PortfolioApp: React.FC = () => {
             settings={settings}
             onStop={handleStopOptimization}
           />
-        )}
+        </div>
 
         {activeTab === Tab.Results && result && stockData && settings && (
           <ResultsDisplay
