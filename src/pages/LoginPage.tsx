@@ -22,8 +22,7 @@ const LoginPage: React.FC = () => {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [userPlan, setUserPlan] = useState<string | null>(null);
   const [paymentCount, setPaymentCount] = useState<number>(0);
-  const [isBlocked, setIsBlocked] = useState(false);
-  const [blockReason, setBlockReason] = useState<string | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -34,14 +33,6 @@ const LoginPage: React.FC = () => {
         try {
           const response = await fetch(`/api/check-user-status?email=${encodeURIComponent(user.email || '')}`);
           const data = await response.json();
-
-          // 檢查是否被封鎖
-          if (data.blocked) {
-            setIsBlocked(true);
-            setBlockReason(data.blockReason || '違反使用條款');
-            setCheckingAuth(false);
-            return;
-          }
 
           if (data.approved === true && !isUpgradeMode) {
             // 已通過審批且不是升級模式 → 跳轉到 app
@@ -145,33 +136,11 @@ const LoginPage: React.FC = () => {
       const data = await response.json();
 
       if (data.success) {
-        // 檢查是否被 Blacklist 封鎖
-        if (data.blocked) {
-          setIsBlocked(true);
-          setBlockReason(data.reason || '違反使用條款');
-          setUploading(false);
-          return;
-        }
-
         setUploadSuccess(true);
-        setUploading(false);
-
-        // ===== 改進：上傳成功後直接跳轉到功能頁 =====
-        // 顯示成功訊息 2 秒後跳轉
-        setTimeout(() => {
-          navigate('/app');
-        }, 2000);
-
       } else {
-        // 檢查是否因為 Blacklist 被拒絕
-        if (data.blocked) {
-          setIsBlocked(true);
-          setBlockReason(data.reason || '違反使用條款');
-        } else {
-          setUploadError(data.error || data.message || (language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again'));
-        }
-        setUploading(false);
+        setUploadError(data.error || data.message || (language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again'));
       }
+      setUploading(false);
     } catch (err) {
       console.error('Upload error:', err);
       setUploadError(language === 'zh-TW' ? '上傳失敗，請重試' : 'Upload failed, please try again');
@@ -199,52 +168,6 @@ const LoginPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#0B1120] flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
-      </div>
-    );
-  }
-
-  // ===== 新增：顯示被封鎖的訊息 =====
-  if (isBlocked) {
-    return (
-      <div className="min-h-screen bg-[#0B1120] flex flex-col">
-        {/* Header */}
-        <header className="p-4 flex justify-between items-center">
-          <a href="/" className="flex items-center gap-2">
-            <Logo />
-            <span className="text-xl font-bold text-white">PortfolioBlender</span>
-          </a>
-        </header>
-
-        {/* Blocked Message */}
-        <main className="flex-1 flex items-center justify-center p-4">
-          <div className="w-full max-w-md">
-            <div className="bg-slate-900/50 border border-red-500/30 rounded-2xl p-8 backdrop-blur-sm text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
-                <AlertCircle className="w-8 h-8 text-red-400" />
-              </div>
-              <h1 className="text-2xl font-bold text-white mb-2">
-                {language === 'zh-TW' ? '帳戶已被停用' : 'Account Suspended'}
-              </h1>
-              <p className="text-slate-400 mb-4">
-                {language === 'zh-TW' ? '您的帳戶因以下原因被停用：' : 'Your account has been suspended for:'}
-              </p>
-              <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 mb-6">
-                <p className="text-red-300">{blockReason}</p>
-              </div>
-              <p className="text-slate-500 text-sm">
-                {language === 'zh-TW'
-                  ? '如有疑問，請聯繫客服。'
-                  : 'If you have questions, please contact support.'}
-              </p>
-              <a
-                href="/"
-                className="inline-block mt-6 text-slate-400 hover:text-emerald-400 text-sm transition-colors"
-              >
-                ← {language === 'zh-TW' ? '返回首頁' : 'Back to Home'}
-              </a>
-            </div>
-          </div>
-        </main>
       </div>
     );
   }
@@ -392,6 +315,37 @@ const LoginPage: React.FC = () => {
                         : 'After payment, upload screenshot:'}
                     </p>
 
+                    {/* Terms Agreement Checkbox */}
+                    <label className="flex items-start gap-3 mb-4 cursor-pointer group">
+                      <div className="mt-0.5 shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={agreedToTerms}
+                          onChange={(e) => setAgreedToTerms(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 cursor-pointer"
+                        />
+                      </div>
+                      <span className="text-slate-400 text-xs leading-relaxed group-hover:text-slate-300 transition-colors">
+                        {language === 'zh-TW' ? (
+                          <>
+                            我已閱讀並同意{' '}
+                            <a href="/terms" target="_blank" className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2">
+                              服務條款及免責聲明
+                            </a>
+                            。我理解本平台僅為數據分析工具，不構成任何投資建議，投資涉及風險，過往表現不代表將來回報。
+                          </>
+                        ) : (
+                          <>
+                            I have read and agree to the{' '}
+                            <a href="/terms" target="_blank" className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2">
+                              Terms of Service & Disclaimer
+                            </a>
+                            . I understand this platform is a data analysis tool only and does not constitute investment advice.
+                          </>
+                        )}
+                      </span>
+                    </label>
+
                     <input
                       type="file"
                       ref={fileInputRef}
@@ -401,28 +355,24 @@ const LoginPage: React.FC = () => {
                     />
 
                     {uploadSuccess ? (
-                      <div className="flex flex-col items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="w-5 h-5 text-emerald-400" />
-                          <span className="text-emerald-300 text-sm font-semibold">
-                            {language === 'zh-TW'
-                              ? '付款證明已上傳！'
-                              : 'Payment proof uploaded!'}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-emerald-300/70 text-xs">
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                      <div className="flex items-center gap-2 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                        <CheckCircle className="w-5 h-5 text-emerald-400" />
+                        <span className="text-emerald-300 text-sm">
                           {language === 'zh-TW'
-                            ? '正在跳轉到功能頁...'
-                            : 'Redirecting to app...'}
-                        </div>
+                            ? '付款證明已上傳！我們會在 1-2 個工作天內審核。'
+                            : 'Payment proof uploaded! We will review within 1-2 business days.'}
+                        </span>
                       </div>
                     ) : (
                       <>
                         <button
                           onClick={() => fileInputRef.current?.click()}
-                          disabled={uploading}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white font-semibold transition-all disabled:opacity-50"
+                          disabled={uploading || !agreedToTerms}
+                          className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                            agreedToTerms
+                              ? 'bg-gradient-to-r from-emerald-600 to-sky-600 hover:from-emerald-500 hover:to-sky-500 text-white'
+                              : 'bg-slate-700 text-slate-400'
+                          }`}
                         >
                           {uploading ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
@@ -433,6 +383,11 @@ const LoginPage: React.FC = () => {
                             </>
                           )}
                         </button>
+                        {!agreedToTerms && (
+                          <p className="mt-2 text-xs text-slate-500 text-center">
+                            {language === 'zh-TW' ? '請先勾選同意服務條款' : 'Please agree to the Terms of Service first'}
+                          </p>
+                        )}
 
                         {uploadError && (
                           <div className="mt-3 flex items-center gap-2 text-red-400 text-sm">
@@ -490,14 +445,23 @@ const LoginPage: React.FC = () => {
               </button>
             )}
 
-            {/* Back to Home */}
-            <div className="mt-6 text-center">
+            {/* Footer Links */}
+            <div className="mt-6 text-center space-y-2">
               <a
                 href="/"
                 className="text-slate-400 hover:text-emerald-400 text-sm transition-colors"
               >
-                ← Back to Home
+                ← {language === 'zh-TW' ? '返回首頁' : 'Back to Home'}
               </a>
+              <div>
+                <a
+                  href="/terms"
+                  target="_blank"
+                  className="text-slate-500 hover:text-slate-300 text-xs transition-colors"
+                >
+                  {language === 'zh-TW' ? '服務條款及免責聲明' : 'Terms of Service & Disclaimer'}
+                </a>
+              </div>
             </div>
           </div>
         </div>

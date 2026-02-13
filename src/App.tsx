@@ -4,6 +4,7 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import PortfolioApp from './pages/PortfolioApp';
+import TermsPage from './pages/TermsPage';
 
 const App: React.FC = () => {
   return (
@@ -13,6 +14,7 @@ const App: React.FC = () => {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/app" element={<PortfolioApp />} />
+          <Route path="/terms" element={<TermsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
